@@ -1,0 +1,6 @@
+external_id,customer_email,amount,currency,status,updated_at
+C-1001,ana@shop.test,49.90,USD,paid,2026-03-01T09:00:00Z
+C-1002,ben@shop.test,120.00,USD,paid,2026-03-01T11:30:00Z
+C-1003,chloe@shop.test,15.25,EUR,pending,2026-03-02T08:15:00Z
+C-1004,ana@shop.test,75.00,USD,cancelled,2026-03-02T10:00:00Z
+C-1005,dmitri@shop.test,310.40,USD,paid,2026-03-03T14:45:00Z

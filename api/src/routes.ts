@@ -165,7 +165,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
           FROM runs WHERE started_at > now() - interval '14 days' GROUP BY 1 ORDER BY 1`)).rows;
         const latest = (await db.query(`
           SELECT DISTINCT ON (r.source_id) r.id AS run_id, r.source_id, s.name AS source_name
-          FROM runs r JOIN sources s ON s.id=r.source_id WHERE r.status='success' ORDER BY r.source_id, r.id DESC`)).rows;
+          FROM runs r JOIN sources s ON s.id=r.source_id WHERE r.status='success' AND r.kind <> 'replay' ORDER BY r.source_id, r.id DESC`)).rows;
         const quality = [];
         for (const l of latest) {
           const checks = (await db.query("SELECT check_name, passed, detail FROM quality_results WHERE run_id=$1 ORDER BY id", [l.run_id])).rows;

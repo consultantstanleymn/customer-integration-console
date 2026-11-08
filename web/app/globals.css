@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --text: #111827; --muted: #4b5563; --line: #d9dde3;
+  --primary: #2457d6; --primary-text: #ffffff;
+  --ok: #166534; --ok-bg: #dcfce7; --bad: #b91c1c; --bad-bg: #fee2e2; --warn: #92400e; --warn-bg: #fef3c7;
+  --chart-ok: #2457d6; --chart-bad: #c2410c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e27; --text: #e8ecf1; --muted: #a3adb9; --line: #2a3441;
+    --primary: #7ea6ff; --primary-text: #0b1220;
+    --ok: #86efac; --ok-bg: #123524; --bad: #fca5a5; --bad-bg: #3b1616; --warn: #fcd34d; --warn-bg: #3a2c0b;
+    --chart-ok: #7ea6ff; --chart-bad: #fb923c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e27; --text: #e8ecf1; --muted: #a3adb9; --line: #2a3441;
+  --primary: #7ea6ff; --primary-text: #0b1220;
+  --ok: #86efac; --ok-bg: #123524; --bad: #fca5a5; --bad-bg: #3b1616; --warn: #fcd34d; --warn-bg: #3a2c0b;
+  --chart-ok: #7ea6ff; --chart-bad: #fb923c;
+}
+
+body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; }
+.muted { color: var(--muted); }
+.btn { background: var(--primary); color: var(--primary-text); border-radius: 8px; padding: .5rem .9rem; font-weight: 600; font-size: .9rem; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.btn-danger { background: var(--bad); color: var(--surface); }
+.field { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .6rem; width: 100%; }
+.badge { display: inline-block; border-radius: 999px; padding: .1rem .6rem; font-size: .78rem; font-weight: 600; }
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-bad { background: var(--bad-bg); color: var(--bad); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+table.t { width: 100%; border-collapse: collapse; font-size: .9rem; }
+table.t th { text-align: left; color: var(--muted); font-weight: 600; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
+table.t td { padding: .45rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.scroll-x { overflow-x: auto; }

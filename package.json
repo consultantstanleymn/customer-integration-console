@@ -5,7 +5,11 @@
   "license": "MIT",
   "type": "module",
   "author": "Stanley Sujith Nelavala",
-  "workspaces": ["api", "mocks", "web"],
+  "workspaces": [
+    "api",
+    "mocks",
+    "web"
+  ],
   "scripts": {
     "lint": "eslint .",
     "typecheck": "npm run typecheck -ws",
@@ -17,7 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
-    "@playwright/test": "^1.50.0",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "typescript": "^5.6.0",
