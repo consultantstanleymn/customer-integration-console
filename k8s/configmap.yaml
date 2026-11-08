@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: console-config
+  namespace: integration-console
+data:
+  PORT: "4000"
+  LOG_LEVEL: info
+  COOKIE_SECURE: "true"
+  # Replace with the customer's real values:
+  OIDC_ISSUER: https://idp.customer.example
+  OIDC_CLIENT_ID: integration-console
+  WEB_URL: https://console.customer.example

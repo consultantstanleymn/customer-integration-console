@@ -1,0 +1,576 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Customer Integration Console API",
+    "version": "0.1.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sid"
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "get": {
+        "operationId": "getAuthLogin",
+        "summary": "Start single sign-on (redirects to the identity provider)",
+        "parameters": [],
+        "security": [],
+        "x-minimum-role": "public",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/auth/callback": {
+      "get": {
+        "operationId": "getAuthCallback",
+        "summary": "Finish single sign-on, create the session",
+        "parameters": [],
+        "security": [],
+        "x-minimum-role": "public",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "postAuthLogout",
+        "summary": "End the session",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness and database check",
+        "parameters": [],
+        "security": [],
+        "x-minimum-role": "public",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Current user, role and CSRF token",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/sources": {
+      "get": {
+        "operationId": "getSources",
+        "summary": "List sources with health",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      },
+      "post": {
+        "operationId": "postSources",
+        "summary": "Create a source",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "engineer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 60
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "csv",
+                      "rest",
+                      "webhook"
+                    ]
+                  },
+                  "config": {
+                    "default": {},
+                    "type": "object",
+                    "properties": {
+                      "baseUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "apiKey": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "name",
+                  "type",
+                  "config"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sources/{id}": {
+      "delete": {
+        "operationId": "deleteSourcesId",
+        "summary": "Delete a source and its data",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "admin",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/sources/{id}/run": {
+      "post": {
+        "operationId": "postSourcesIdRun",
+        "summary": "Run a REST or webhook source now",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "engineer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/sources/{id}/upload": {
+      "post": {
+        "operationId": "postSourcesIdUpload",
+        "summary": "Upload a CSV file (text/csv body)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "engineer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "post": {
+        "operationId": "postWebhooksId",
+        "summary": "Receive a webhook (HMAC signed, no session)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [],
+        "x-minimum-role": "public",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "operationId": "getRuns",
+        "summary": "Recent runs (?source_id, ?limit)",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/runs/{id}": {
+      "get": {
+        "operationId": "getRunsId",
+        "summary": "One run with its quality results",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Dashboard numbers: throughput per day, quality scorecard, totals",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/dead-letters": {
+      "get": {
+        "operationId": "getDeadLetters",
+        "summary": "Rows that failed validation (?status)",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "viewer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/dead-letters/{id}/replay": {
+      "post": {
+        "operationId": "postDeadLettersIdReplay",
+        "summary": "Fix (optional) and replay a dead letter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "engineer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dead-letters/{id}/discard": {
+      "post": {
+        "operationId": "postDeadLettersIdDiscard",
+        "summary": "Discard a dead letter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "engineer",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "operationId": "getAudit",
+        "summary": "Audit log (admin only)",
+        "parameters": [],
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "x-minimum-role": "admin",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "No session"
+          },
+          "403": {
+            "description": "Role too low or CSRF token missing"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "summary": "Prometheus metrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  }
+}

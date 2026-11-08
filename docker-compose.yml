@@ -1,0 +1,77 @@
+# Start the app:            docker compose up --build
+# Add Prometheus + Grafana: docker compose --profile observability up --build
+# Web http://localhost:3000   Mock IdP http://localhost:4100   Mock source http://localhost:4200
+name: cic
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cic
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cic-local-only}
+      POSTGRES_DB: cic
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cic -d cic"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mock-oidc:
+    build: { context: ., dockerfile: mocks/Dockerfile }
+    command: ["node_modules/.bin/tsx", "mocks/src/oidc.ts"]
+    environment:
+      PORT: "4100"
+      # The browser reaches the IdP on localhost, so the token issuer is the localhost URL.
+      OIDC_ISSUER: http://localhost:4100
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-dev-only-secret}
+    ports: ["4100:4100"]
+
+  mock-source:
+    build: { context: ., dockerfile: mocks/Dockerfile }
+    command: ["node_modules/.bin/tsx", "mocks/src/source.ts"]
+    environment: { PORT: "4200" }
+    ports: ["4200:4200"]
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    environment:
+      PORT: "4000"
+      DATABASE_URL: postgres://cic:${POSTGRES_PASSWORD:-cic-local-only}@postgres:5432/cic
+      OIDC_ISSUER: http://localhost:4100
+      OIDC_INTERNAL_URL: http://mock-oidc:4100
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-dev-only-secret}
+      WEB_URL: http://localhost:3000
+    depends_on:
+      postgres: { condition: service_healthy }
+      mock-oidc: { condition: service_started }
+    ports: ["4000:4000"]
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args: { API_URL: "http://api:4000" }
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v2.55.1
+    volumes: ["./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    depends_on: [api]
+    ports: ["9090:9090"]
+
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin-local-only}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+    ports: ["3001:3000"]
+
+volumes:
+  pgdata: {}

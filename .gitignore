@@ -6,6 +6,5 @@ dist
 test-results
 playwright-report
 *.tsbuildinfo
-api/openapi.json
 infra/.terraform
 infra/*.tfstate*
