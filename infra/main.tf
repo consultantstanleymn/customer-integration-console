@@ -58,7 +58,9 @@ resource "google_sql_user" "cic" {
 
 resource "google_secret_manager_secret" "database_url" {
   secret_id = "cic-database-url"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
 }
 
 resource "google_secret_manager_secret_version" "database_url" {
