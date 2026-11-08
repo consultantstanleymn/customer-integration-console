@@ -10,7 +10,7 @@ const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "must be 
 export const OrderIn = z.object({
   external_id: z.string().trim().min(1, "required"),
   customer_email: z.email(),
-  amount: z.coerce.number().finite().nonnegative(),
+  amount: z.coerce.number().finite().nonnegative().max(1_000_000_000),
   currency: z.string().trim().length(3, "must be 3 letters"),
   status: z.string().trim().min(1, "required"),
   updated_at: isoDate,

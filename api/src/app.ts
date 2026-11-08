@@ -16,7 +16,7 @@ declare module "fastify" {
 
 export async function buildApp(db: Db, cfg: Config) {
   const metrics = createMetrics();
-  const app = Fastify({ loggerInstance: createLogger(cfg.LOG_LEVEL), bodyLimit: 5 * 1024 * 1024, disableRequestLogging: false });
+  const app = Fastify({ loggerInstance: createLogger(cfg.LOG_LEVEL), bodyLimit: 5 * 1024 * 1024 });
   await app.register(cookie);
 
   // JSON bodies keep their raw text too (webhook signatures are computed over the raw bytes).

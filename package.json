@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "type": "module",
   "author": "Stanley Sujith Nelavala",
   "workspaces": ["api", "mocks", "web"],
   "scripts": {
