@@ -1,0 +1,26 @@
+{
+  "name": "customer-integration-console",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Stanley Sujith Nelavala",
+  "workspaces": ["api", "mocks", "web"],
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck -ws",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "stack": "node scripts/stack.mjs",
+    "openapi": "npm run openapi -w api",
+    "build": "npm run build -w web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}

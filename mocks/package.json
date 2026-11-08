@@ -1,0 +1,15 @@
+{
+  "name": "@cic/mocks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "oidc": "tsx src/oidc.ts",
+    "source": "tsx src/source.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jose": "^5.9.0",
+    "tsx": "^4.19.0"
+  }
+}
