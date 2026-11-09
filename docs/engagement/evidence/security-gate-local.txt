@@ -5,7 +5,7 @@ code commit: a27c71ad183fc82656e84969551ad4a20e14555a
 working tree clean at run time: yes
 machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
 command: gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 . && gitleaks dir --config .gitleaks.toml --redact --no-banner . && nice -n 10 npx vitest run test/security-exceptions.test.ts
-notes: The secret scan found no leaks in the git history or in the working tree. The exceptions checker rejected an expired item and an item with a missing field. This does not prove the CI workflow, the dependency audit, the image scan or the SBOM. Those parts come in a later packet.
+notes: The secret scan found no leaks in the git history or in the working tree. The exceptions checker rejected an expired item and an item with a missing field. The secret scan and checker sections ran first, at code commit 992fda3d9b7fdef5533dbd81e6a222c1d12bbf62 (evidence commit 6ebee60). The sections from "Dependency audit" down ran second, at the code commit above (evidence commit f1e553a): npm audit, semgrep, Trivy image scans, SBOM, actionlint and the exceptions file. The command line above covers the secret scan and the checker only. Each later section names its tool. PARTLY RUN because the GitHub workflow and the CodeQL job did not run.
 ---
 
 ## Secret scan, full git history
