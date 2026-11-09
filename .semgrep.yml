@@ -1,0 +1,24 @@
+rules:
+  - id: no-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Do not use eval.
+    pattern: eval(...)
+  - id: no-exec-template-string
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Do not pass a template string to child_process exec.
+    patterns:
+      - pattern-either:
+          - pattern: exec(`...`)
+          - pattern: child_process.exec(`...`)
+  - id: no-dangerously-set-inner-html
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Do not use dangerouslySetInnerHTML.
+    pattern: <$X dangerouslySetInnerHTML={...} />
+  - id: no-jwt-decode-without-verify
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: Do not trust a decoded token. Verify it first.
+    pattern: decodeJwt(...)

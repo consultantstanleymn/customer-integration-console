@@ -18,6 +18,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
 WORKDIR /app
 COPY --from=build /app/web/.next/standalone ./
 COPY --from=build /app/web/.next/static web/.next/static
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-*
 USER node
 EXPOSE 3000
 CMD ["node", "web/server.js"]

@@ -18,6 +18,7 @@ COPY api/package.json api/
 COPY mocks/package.json mocks/
 COPY web/package.json web/
 RUN npm ci --workspace api --omit=dev && npm cache clean --force
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-*
 COPY --from=build /app/api/dist api/dist
 COPY api/migrations api/migrations
 COPY api/sql api/sql
