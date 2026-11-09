@@ -1,0 +1,25 @@
+# Evidence: Audit hash chain, export, verify and tamper detection
+label: VERIFIED LOCALLY
+date: 2026-11-09 08:09 UTC
+code commit: 298b8c5253eb75bd62ccf2ca68649c0573bde038
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: nice -n 10 npx vitest run api/test/audit-chain.test.ts --reporter=verbose
+notes: The tests change a row and delete a row with the append-only trigger disabled inside the test. The verifier reports the first bad row id. A DB admin who rewrites the whole chain, or deletes the last rows, is not detected without an external anchor of the last hash. Rows before the migration are reported as unchained.
+---
+
+ RUN  v5.1.0 ~/fde-integration-console
+
+ ✓ api/test/audit-chain.test.ts > audit hash chain > each new row links to the previous hash 66ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > concurrent audit writes keep one chain 94ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > verifyChain passes on untouched rows 49ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > export then verify passes 64ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > tampered row is detected 44ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > deleted row is detected 58ms
+ ✓ api/test/audit-chain.test.ts > audit hash chain > rows before the chain migration are reported as unchained, not as tampered 57ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  03:09:26
+   Duration  2.48s (import 50%, tests 42%, transform 7%, worker 1%)
+
