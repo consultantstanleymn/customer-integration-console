@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { computeRowHash, type AuditFields } from "./audit-chain.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const MIGRATIONS_DIR = join(here, "..", "migrations");
@@ -45,10 +46,36 @@ export async function audit(
   e: { actor: string; role?: string | null; action: string; target?: string | null; outcome?: Outcome; detail?: unknown },
 ): Promise<void> {
   try {
-    await db.query(
-      "INSERT INTO audit_log (actor, role, action, target, outcome, detail) VALUES ($1,$2,$3,$4,$5,$6)",
-      [e.actor, e.role ?? null, e.action, e.target ?? null, e.outcome ?? "ok", JSON.stringify(e.detail ?? {})],
-    );
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(4242)");
+      const last = await client.query(
+        "SELECT row_hash FROM audit_log WHERE row_hash IS NOT NULL ORDER BY id DESC LIMIT 1",
+      );
+      const prevHash: string = last.rows.length > 0 ? (last.rows[0].row_hash as string) : "";
+      const at = new Date();
+      const fields: AuditFields = {
+        at: at.toISOString(),
+        actor: e.actor,
+        role: e.role ?? null,
+        action: e.action,
+        target: e.target ?? null,
+        outcome: e.outcome ?? "ok",
+        detail: e.detail ?? {},
+      };
+      const rowHash = computeRowHash(prevHash, fields);
+      await client.query(
+        "INSERT INTO audit_log (at, actor, role, action, target, outcome, detail, prev_hash, row_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        [at, fields.actor, fields.role, fields.action, fields.target, fields.outcome, JSON.stringify(fields.detail), prevHash, rowHash],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(JSON.stringify({ level: "error", msg: "audit write failed", err: String(err) }));
   }
