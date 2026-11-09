@@ -1,7 +1,7 @@
 # Evidence: Security gate local run, secret scan part
-label: VERIFIED LOCALLY
+label: PARTLY RUN
 date: 2026-11-09 06:43 UTC
-code commit: 992fda3d9b7fdef5533dbd81e6a222c1d12bbf62
+code commit: a27c71ad183fc82656e84969551ad4a20e14555a
 working tree clean at run time: yes
 machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
 command: gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 . && gitleaks dir --config .gitleaks.toml --redact --no-banner . && nice -n 10 npx vitest run test/security-exceptions.test.ts
@@ -33,3 +33,25 @@ notes: The secret scan found no leaks in the git history or in the working tree.
    Start at  01:43:24
    Duration  2.00s (tests 71%, transform 16%, import 9%, worker 3%)
 ```
+
+## Dependency audit, production
+found 0 vulnerabilities
+
+## Semgrep rules
+Ran 4 rules on 26 files: 0 findings (semgrep 1.184.0).
+
+## Trivy image scans (HIGH,CRITICAL, fixed only)
+First scan: 10 findings in the npm bundled in node:22-alpine (brace-expansion, ip-address, pacote, picomatch, sigstore). Fix: runtime stages remove npm.
+Second scan after the fix: exit code 0 for localhost/cic-api:sec, localhost/cic-web:sec, localhost/cic-mocks:sec.
+
+## SBOM
+docs/engagement/evidence/sbom-source.cdx.json written with trivy fs (CycloneDX).
+
+## Workflow lint
+actionlint: clean
+
+## Exceptions
+OK: 0 exception(s) in security/exceptions.json
+
+## Not run
+Authored, not run: .github/workflows/security.yml is written and syntax-checked with actionlint 1.7.12. It was not executed against GitHub Actions. Reason: needs GitHub Actions. The CodeQL job is in the same state.
