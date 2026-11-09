@@ -4,7 +4,7 @@ import { audit, type Db } from "./db.js";
 import type { Config } from "./config.js";
 import { createLogger } from "./logger.js";
 import { createMetrics } from "./metrics.js";
-import { canAccess, loadSession, safeEqual, type Session } from "./auth.js";
+import { canAccess, loadSession, safeEqual, scopesOf, verifyBearer, type Session } from "./auth.js";
 import { authRoutes } from "./auth-routes.js";
 import { HttpError, routes } from "./routes.js";
 import { buildOpenApi } from "./openapi.js";
@@ -48,18 +48,40 @@ export async function buildApp(db: Db, cfg: Config) {
       handler: async (req, reply) => {
         if (r.auth !== "public") {
           const s = await loadSession(db, req.cookies.sid);
-          if (!s) throw new HttpError(401, "sign in required");
-          if (!canAccess(s.role, r.auth)) {
-            await audit(db, { actor: s.email, role: s.role, action: "access.denied", target: `${r.method} ${r.path}`, outcome: "denied" });
-            metrics.authEvents.inc({ event: "forbidden" });
-            throw new HttpError(403, `requires role ${r.auth}`);
+          if (s) {
+            if (!canAccess(s.role, r.auth)) {
+              await audit(db, { actor: s.email, role: s.role, action: "access.denied", target: `${r.method} ${r.path}`, outcome: "denied" });
+              metrics.authEvents.inc({ event: "forbidden" });
+              throw new HttpError(403, `requires role ${r.auth}`);
+            }
+            // CSRF: state-changing calls must echo the token that only our own pages can read via /me.
+            if (r.method !== "GET" && !safeEqual(String(req.headers["x-csrf-token"] ?? ""), s.csrf)) {
+              await audit(db, { actor: s.email, role: s.role, action: "csrf.rejected", target: `${r.method} ${r.path}`, outcome: "denied" });
+              throw new HttpError(403, "missing or wrong CSRF token");
+            }
+            req.session = s;
+          } else {
+            const header = String(req.headers.authorization ?? "");
+            if (!header.startsWith("Bearer ")) throw new HttpError(401, "sign in required");
+            let payload: { sub?: unknown; scope?: unknown };
+            try {
+              payload = await verifyBearer(cfg, header.slice("Bearer ".length).trim());
+            } catch {
+              metrics.authEvents.inc({ event: "bearer_invalid" });
+              throw new HttpError(401, "invalid or expired token");
+            }
+            const sub = String(payload.sub ?? "");
+            const actor = `client:${sub}`;
+            const need = r.scopes ?? [];
+            const have = scopesOf(payload);
+            if (need.length === 0 || !need.every((x) => have.includes(x))) {
+              await audit(db, { actor, role: "machine", action: "access.denied", target: `${r.method} ${r.path}`, outcome: "denied", detail: { need, have } });
+              metrics.authEvents.inc({ event: "forbidden" });
+              throw new HttpError(403, "token lacks the required scope");
+            }
+            // Machine calls carry no cookie, so they skip CSRF. The role check is replaced by the scope check.
+            req.session = { id: "machine", email: actor, name: sub, role: "viewer", csrf: "", machine: true };
           }
-          // CSRF: state-changing calls must echo the token that only our own pages can read via /me.
-          if (r.method !== "GET" && !safeEqual(String(req.headers["x-csrf-token"] ?? ""), s.csrf)) {
-            await audit(db, { actor: s.email, role: s.role, action: "csrf.rejected", target: `${r.method} ${r.path}`, outcome: "denied" });
-            throw new HttpError(403, "missing or wrong CSRF token");
-          }
-          req.session = s;
         }
         let body = req.body;
         if (r.body) {

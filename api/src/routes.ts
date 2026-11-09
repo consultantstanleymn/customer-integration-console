@@ -19,6 +19,7 @@ export type RouteDef = {
   path: string;               // Fastify style: /sources/:id
   summary: string;
   auth: "public" | Role;      // minimum role
+  scopes?: string[];          // machine access token scopes; a route without scopes rejects machine tokens
   body?: z.ZodType;
   rawText?: boolean;          // body is raw text (CSV upload)
   handler: (c: Ctx) => Promise<unknown>;
@@ -32,6 +33,8 @@ const idOf = (p: Record<string, string>) => { const n = Number(p.id); if (!Numbe
 
 export function routes({ db, metrics }: Deps): RouteDef[] {
   const who = (c: Ctx) => c.req.session?.email ?? "system";
+  // Machine clients are recorded with the role "machine" in the audit log.
+  const roleOf = (c: Ctx) => (c.req.session?.machine ? "machine" : c.req.session?.role);
 
   async function sourceById(id: number): Promise<SourceRow> {
     const s = (await db.query("SELECT id, name, type, config, watermark FROM sources WHERE id=$1", [id])).rows[0];
@@ -42,7 +45,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
     metrics.deadLettersPending.set(Number((await db.query("SELECT count(*) FROM dead_letters WHERE status='pending'")).rows[0].count));
   }
   async function finish(c: Ctx, action: string, source: SourceRow, result: Awaited<ReturnType<typeof runPipeline>>) {
-    await audit(db, { actor: who(c), role: c.req.session?.role, action, target: `source:${source.id}`, outcome: result.status === "success" ? "ok" : "error", detail: { runId: result.runId, loaded: result.rowsLoaded, failed: result.rowsFailed } });
+    await audit(db, { actor: who(c), role: roleOf(c), action, target: `source:${source.id}`, outcome: result.status === "success" ? "ok" : "error", detail: { runId: result.runId, loaded: result.rowsLoaded, failed: result.rowsFailed } });
     await pendingGauge();
     return result;
   }
@@ -55,7 +58,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
     { method: "GET", path: "/me", summary: "Current user, role and CSRF token", auth: "viewer", handler: async (c) => { const s = c.req.session!; return { email: s.email, name: s.name, role: s.role, csrfToken: s.csrf }; } },
 
     {
-      method: "GET", path: "/sources", summary: "List sources with health", auth: "viewer",
+      method: "GET", path: "/sources", summary: "List sources with health", auth: "viewer", scopes: ["sources:read"],
       handler: async () => {
         const { rows } = await db.query(`
           SELECT s.id, s.name, s.type, s.config, s.watermark, s.created_at,
@@ -76,7 +79,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
         if (b.type === "webhook") { secret = newToken(24); config.secret = secret; }
         try {
           const r = (await db.query("INSERT INTO sources (name, type, config, created_by) VALUES ($1,$2,$3,$4) RETURNING id", [b.name, b.type, JSON.stringify(config), who(c)])).rows[0];
-          await audit(db, { actor: who(c), role: c.req.session?.role, action: "source.create", target: `source:${r.id}`, detail: { name: b.name, type: b.type } });
+          await audit(db, { actor: who(c), role: roleOf(c), action: "source.create", target: `source:${r.id}`, detail: { name: b.name, type: b.type } });
           c.reply.code(201);
           return { id: r.id, name: b.name, type: b.type, webhookSecret: secret };
         } catch (e) {
@@ -91,13 +94,13 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
         const id = idOf(c.params);
         const r = await db.query("DELETE FROM sources WHERE id=$1", [id]);
         if (!r.rowCount) throw new HttpError(404, "source not found");
-        await audit(db, { actor: who(c), role: c.req.session?.role, action: "source.delete", target: `source:${id}` });
+        await audit(db, { actor: who(c), role: roleOf(c), action: "source.delete", target: `source:${id}` });
         await pendingGauge();
         return { deleted: id };
       },
     },
     {
-      method: "POST", path: "/sources/:id/run", summary: "Run a REST or webhook source now", auth: "engineer",
+      method: "POST", path: "/sources/:id/run", summary: "Run a REST or webhook source now", auth: "engineer", scopes: ["runs:start"],
       handler: async (c) => {
         const s = await sourceById(idOf(c.params));
         const result = await guard(async () => {
@@ -199,7 +202,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
         const s = await sourceById(d.source_id);
         const result = await guard(() => runPipeline(db, s, [payload as Record<string, unknown>], { kind: "replay", triggeredBy: who(c), metrics }));
         if (result.status === "success") await db.query("UPDATE dead_letters SET status='replayed', resolved_at=now() WHERE id=$1", [id]);
-        await audit(db, { actor: who(c), role: c.req.session?.role, action: "deadletter.replay", target: `deadletter:${id}`, outcome: result.status === "success" ? "ok" : "error", detail: { runId: result.runId, edited: !!(c.body as z.infer<typeof ReplayBody>).payload } });
+        await audit(db, { actor: who(c), role: roleOf(c), action: "deadletter.replay", target: `deadletter:${id}`, outcome: result.status === "success" ? "ok" : "error", detail: { runId: result.runId, edited: !!(c.body as z.infer<typeof ReplayBody>).payload } });
         await pendingGauge();
         return result;
       },
@@ -210,7 +213,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
         const id = idOf(c.params);
         const r = await db.query("UPDATE dead_letters SET status='discarded', resolved_at=now() WHERE id=$1 AND status='pending'", [id]);
         if (!r.rowCount) throw new HttpError(404, "no pending dead letter with this id");
-        await audit(db, { actor: who(c), role: c.req.session?.role, action: "deadletter.discard", target: `deadletter:${id}` });
+        await audit(db, { actor: who(c), role: roleOf(c), action: "deadletter.discard", target: `deadletter:${id}` });
         await pendingGauge();
         return { discarded: id };
       },
@@ -218,7 +221,7 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
     {
       method: "GET", path: "/audit", summary: "Audit log (admin only)", auth: "admin",
       handler: async (c) => {
-        await audit(db, { actor: who(c), role: c.req.session?.role, action: "audit.view" });
+        await audit(db, { actor: who(c), role: roleOf(c), action: "audit.view" });
         return (await db.query("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200")).rows;
       },
     },

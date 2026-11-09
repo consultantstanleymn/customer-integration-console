@@ -23,7 +23,10 @@ export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = 
   const db = await freshDb();
   const oidcPort: number = await freePort();
   const issuer = `http://127.0.0.1:${oidcPort}`;
-  const oidc = await createOidc({ issuer, clientId: "integration-console", clientSecret: "dev-only-secret" });
+  const oidc = await createOidc({
+    issuer, clientId: "integration-console", clientSecret: "dev-only-secret",
+    machineClients: [{ clientId: "etl-runner", secret: "test-runner-secret", scopes: ["runs:start", "sources:read"] }],
+  });
   await listen(oidc, oidcPort);
   const srcPort: number = await freePort();
   const source = createSource(sourceOpts);
@@ -48,6 +51,17 @@ export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = 
     return { cookies: { sid }, csrf: me.csrfToken, email: me.email };
   }
 
+  /** Gets a machine access token from the mock IdP with the client-credentials grant. */
+  async function machineToken(scope?: string, secret = "test-runner-secret", ttl?: number): Promise<string> {
+    const form = new URLSearchParams({ grant_type: "client_credentials", client_id: "etl-runner", client_secret: secret });
+    if (scope !== undefined) form.set("scope", scope);
+    if (ttl !== undefined) form.set("ttl", String(ttl));
+    const res = await fetch(`${issuer}/token`, { method: "POST", body: form });
+    const body = (await res.json()) as { access_token?: string; error?: string };
+    if (!res.ok || !body.access_token) throw new Error(`machine token failed: ${res.status} ${JSON.stringify(body)}`);
+    return body.access_token;
+  }
+
   /** Calls the API as a logged in user, with the CSRF header on writes. */
   async function call(who: Who | null, method: "GET" | "POST" | "DELETE", url: string, payload?: unknown, headers: Record<string, string> = {}) {
     const isText = typeof payload === "string";
@@ -59,7 +73,7 @@ export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = 
   }
 
   return {
-    db, app, cfg, login, call,
+    db, app, cfg, login, call, machineToken,
     sourceUrl: `http://127.0.0.1:${srcPort}`,
     async stop() { await app.close(); oidc.close(); source.close(); await db.end(); },
   };

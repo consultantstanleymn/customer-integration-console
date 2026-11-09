@@ -4,7 +4,14 @@ import { routes, type Deps, type RouteDef } from "./routes.js";
 /** Expected result of a call with no session, or with a session of a given role. */
 export type Expectation = "allow" | "401" | "403";
 
-export type MatrixRow = { anonymous: Expectation; viewer: Expectation; engineer: Expectation; admin: Expectation };
+export type MatrixRow = {
+  anonymous: Expectation;
+  viewer: Expectation;
+  engineer: Expectation;
+  admin: Expectation;
+  /** Expected result of a call with a machine access token that holds the route scopes. */
+  machine?: Expectation;
+};
 
 /**
  * Expected authorization matrix, keyed "METHOD /path".
@@ -17,24 +24,24 @@ export const EXPECTED: Record<string, MatrixRow> = {
   "POST /auth/logout": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
 
   "GET /health": { anonymous: "allow", viewer: "allow", engineer: "allow", admin: "allow" },
-  "GET /me": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
+  "GET /me": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "403" },
 
-  "GET /sources": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
-  "POST /sources": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow" },
-  "DELETE /sources/:id": { anonymous: "401", viewer: "403", engineer: "403", admin: "allow" },
-  "POST /sources/:id/run": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow" },
-  "POST /sources/:id/upload": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow" },
+  "GET /sources": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "allow" },
+  "POST /sources": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow", machine: "403" },
+  "DELETE /sources/:id": { anonymous: "401", viewer: "403", engineer: "403", admin: "allow", machine: "403" },
+  "POST /sources/:id/run": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow", machine: "allow" },
+  "POST /sources/:id/upload": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow", machine: "403" },
   "POST /webhooks/:id": { anonymous: "allow", viewer: "allow", engineer: "allow", admin: "allow" },
 
-  "GET /runs": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
-  "GET /runs/:id": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
-  "GET /stats": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
+  "GET /runs": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "403" },
+  "GET /runs/:id": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "403" },
+  "GET /stats": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "403" },
 
-  "GET /dead-letters": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow" },
-  "POST /dead-letters/:id/replay": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow" },
-  "POST /dead-letters/:id/discard": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow" },
+  "GET /dead-letters": { anonymous: "401", viewer: "allow", engineer: "allow", admin: "allow", machine: "403" },
+  "POST /dead-letters/:id/replay": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow", machine: "403" },
+  "POST /dead-letters/:id/discard": { anonymous: "401", viewer: "403", engineer: "allow", admin: "allow", machine: "403" },
 
-  "GET /audit": { anonymous: "401", viewer: "403", engineer: "403", admin: "allow" },
+  "GET /audit": { anonymous: "401", viewer: "403", engineer: "403", admin: "allow", machine: "403" },
 };
 
 /** Key used by the matrix map and the test. */
@@ -68,12 +75,12 @@ export function renderMatrixMarkdown(defs: RouteDef[]): string {
   lines.push("");
   lines.push("`allow` means the call passed authz. A 2xx, 404 or 422 all count as passed authz.");
   lines.push("");
-  lines.push("| Method and path | Summary | Anonymous | Viewer | Engineer | Admin |");
-  lines.push("|---|---|---|---|---|---|");
+  lines.push("| Method and path | Summary | Anonymous | Viewer | Engineer | Admin | Machine |");
+  lines.push("|---|---|---|---|---|---|---|");
   for (const r of defs) {
     const k = keyOf(r);
     const e = EXPECTED[k];
-    const cells = e ? [e.anonymous, e.viewer, e.engineer, e.admin] : ["MISSING", "MISSING", "MISSING", "MISSING"];
+    const cells = e ? [e.anonymous, e.viewer, e.engineer, e.admin, e.machine ?? "n/a"] : ["MISSING", "MISSING", "MISSING", "MISSING", "MISSING"];
     lines.push(`| \`${k}\` | ${r.summary} | ${cells.join(" | ")} |`);
   }
   lines.push("");

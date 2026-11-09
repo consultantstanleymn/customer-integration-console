@@ -90,10 +90,12 @@ export async function createOidc(cfg: {
         const requested = (f.get("scope") ?? "").split(/\s+/).filter(Boolean);
         const granted = requested.length === 0 ? client.scopes : requested;
         if (!granted.every((s) => client.scopes.includes(s))) return send(400, JSON.stringify({ error: "invalid_scope" }));
+        // The optional `ttl` field (seconds) is honoured only here, so tests can make short-lived tokens.
+        const ttl = Number(f.get("ttl") ?? "") || 300;
         const accessToken = await new SignJWT({ scope: granted.join(" ") })
           .setProtectedHeader({ alg: "RS256", kid: "mock-1" }).setIssuer(cfg.issuer).setAudience("cic-api")
-          .setSubject(client.clientId).setIssuedAt().setExpirationTime("5m").sign(privateKey);
-        return send(200, JSON.stringify({ access_token: accessToken, token_type: "Bearer", expires_in: 300, scope: granted.join(" ") }));
+          .setSubject(client.clientId).setIssuedAt().setExpirationTime(`${ttl}s`).sign(privateKey);
+        return send(200, JSON.stringify({ access_token: accessToken, token_type: "Bearer", expires_in: ttl, scope: granted.join(" ") }));
       }
 
       const p = codes.get(f.get("code") ?? "");

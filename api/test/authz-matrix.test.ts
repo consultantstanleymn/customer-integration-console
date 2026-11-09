@@ -34,6 +34,7 @@ const defs: RouteDef[] = allRoutes({ db: {} as never, cfg: loadConfig({ DATABASE
 describe("authz matrix", () => {
   let env: Env;
   let who: Record<Role, Awaited<ReturnType<Env["login"]>> | null>;
+  let machine: string;
 
   it("prepares the environment", async () => {
     env = await startEnv();
@@ -43,6 +44,7 @@ describe("authz matrix", () => {
       engineer: await env.login("u-bob"),
       admin: await env.login("u-alice"),
     };
+    machine = await env.machineToken("runs:start sources:read");
     expect(defs.length).toBeGreaterThan(0);
   });
 
@@ -61,6 +63,15 @@ describe("authz matrix", () => {
     const actor = key === "POST /auth/logout" && who[role] ? await env.login(SUBS[role as Exclude<Role, "anonymous">]) : who[role];
     const res = await env.call(actor, def!.method as "GET" | "POST" | "DELETE", concrete(def!.path), body);
     expect(classify(res.status), `${key} as ${role} returned ${res.status}: ${res.raw}`).toBe(expected![role]);
+  });
+
+  const machineCases: string[] = defs.filter((d) => EXPECTED[keyOf(d)]?.machine).map(keyOf);
+
+  it.each(machineCases)("authz matrix: %s as machine", async (key) => {
+    const def = defs.find((d) => keyOf(d) === key)!;
+    const expected = EXPECTED[key]!.machine!;
+    const res = await env.call(null, def.method as "GET" | "POST" | "DELETE", concrete(def.path), sampleBodies[key], { authorization: `Bearer ${machine}` });
+    expect(classify(res.status), `${key} as machine returned ${res.status}: ${res.raw}`).toBe(expected);
   });
 
   it("every route has an expected entry", () => {

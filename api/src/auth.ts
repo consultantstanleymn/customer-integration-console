@@ -26,7 +26,7 @@ export function safeEqual(a: string, b: string): boolean {
 
 export const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
 
-export type Session = { id: string; email: string; name: string; role: Role; csrf: string };
+export type Session = { id: string; email: string; name: string; role: Role; csrf: string; machine?: boolean };
 
 export async function createSession(db: Db, cfg: Config, u: { email: string; name: string; role: Role }): Promise<Session> {
   const s = { id: newToken(), csrf: newToken(16), ...u };
@@ -63,9 +63,36 @@ async function tokenEndpoint(cfg: Config): Promise<string> {
 }
 
 /** The JWKS URL. Discovery is used unless the setting turns it off. */
-async function jwksUri(cfg: Config): Promise<string> {
+export async function jwksUri(cfg: Config): Promise<string> {
   if (cfg.OIDC_DISCOVERY === "false") return new URL("/jwks", cfg.oidcInternal).toString();
   return toInternal(cfg, (await discover(cfg.oidcInternal, fetch, cfg.OIDC_ISSUER)).jwks_uri);
+}
+
+/** One remote key set per JWKS URL. The set caches keys and refetches on an unknown kid. */
+const jwksCache = new Map<string, JWTVerifyGetKey>();
+async function jwksFor(cfg: Config): Promise<JWTVerifyGetKey> {
+  const uri = await jwksUri(cfg);
+  let set = jwksCache.get(uri);
+  if (!set) { set = createRemoteJWKSet(new URL(uri)); jwksCache.set(uri, set); }
+  return set;
+}
+
+/**
+ * Checks a machine access token. It verifies the signature (RS256 only), the issuer, the audience
+ * and the expiry. Any failure throws. The scopes come from the space-separated `scope` claim.
+ */
+export async function verifyBearer(cfg: Config, token: string) {
+  const { payload } = await jwtVerify(token, await jwksFor(cfg), {
+    issuer: cfg.OIDC_ISSUER,
+    audience: cfg.API_AUDIENCE,
+    algorithms: ["RS256"],
+  });
+  return payload;
+}
+
+/** The scopes in a verified token payload. */
+export function scopesOf(payload: { scope?: unknown }): string[] {
+  return typeof payload.scope === "string" ? payload.scope.split(/\s+/).filter(Boolean) : [];
 }
 
 /** Builds the URL that sends the browser to the identity provider (code flow + PKCE + state + nonce). */
