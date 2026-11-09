@@ -24,7 +24,7 @@ const listen = (s: Server, port: number) => new Promise<void>((r) => s.listen(po
 export type Env = Awaited<ReturnType<typeof startEnv>>;
 
 /** A full stack in-process: Postgres (from global setup), mock OIDC, mock REST source and the API app. */
-export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = {}) {
+export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = {}, cfgOverrides: Record<string, string> = {}) {
   const db = await freshDb();
   const oidcPort: number = await freePort();
   const issuer = `http://127.0.0.1:${oidcPort}`;
@@ -36,7 +36,7 @@ export async function startEnv(sourceOpts: Parameters<typeof createSource>[0] = 
   const srcPort: number = await freePort();
   const source = createSource(sourceOpts);
   await listen(source, srcPort);
-  const cfg: Config = loadConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL!, OIDC_ISSUER: issuer, LOG_LEVEL: "silent", WEB_URL: "http://localhost:3999" });
+  const cfg: Config = loadConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL!, OIDC_ISSUER: issuer, LOG_LEVEL: "silent", WEB_URL: "http://localhost:3999", LOGIN_RATE_PER_MIN: "1000", ...cfgOverrides });
   const app = await buildApp(db, cfg);
   await app.ready();
 

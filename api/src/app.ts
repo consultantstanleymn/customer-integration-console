@@ -9,10 +9,13 @@ import { authRoutes } from "./auth-routes.js";
 import { HttpError, routes } from "./routes.js";
 import { buildOpenApi } from "./openapi.js";
 import { issuesOf } from "./schemas.js";
+import { createLoginLimiter } from "./login-limit.js";
 
 declare module "fastify" {
   interface FastifyRequest { rawBody?: string; session?: Session }
 }
+
+const LOGIN_PATHS = new Set(["/auth/login", "/auth/callback"]);
 
 export async function buildApp(db: Db, cfg: Config) {
   const metrics = createMetrics();
@@ -29,6 +32,18 @@ export async function buildApp(db: Db, cfg: Config) {
 
   const deps = { db, cfg, metrics };
   const defs = [...authRoutes(deps), ...routes(deps)];
+  const loginLimiter = createLoginLimiter({ perMinute: cfg.LOGIN_RATE_PER_MIN });
+
+  app.addHook("onSend", async (req, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header("X-Frame-Options", "DENY");
+    const hasCredential = Boolean(req.cookies?.sid) || String(req.headers.authorization ?? "").startsWith("Bearer ");
+    if (hasCredential) reply.header("Cache-Control", "no-store");
+    const ct = String(reply.getHeader("content-type") ?? "");
+    if (ct.includes("application/json")) reply.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    return payload;
+  });
 
   app.addHook("onResponse", async (req, reply) => {
     metrics.http.observe({ method: req.method, route: req.routeOptions.url ?? "unmatched", status: String(reply.statusCode) }, reply.elapsedTime / 1000);
@@ -46,6 +61,16 @@ export async function buildApp(db: Db, cfg: Config) {
       method: r.method,
       url: r.path,
       handler: async (req, reply) => {
+        if (LOGIN_PATHS.has(r.path)) {
+          const ip = req.ip;
+          const gate = loginLimiter.take(ip);
+          if (!gate.ok) {
+            await audit(db, { actor: "anonymous", action: "auth.rate_limited", target: `${r.method} ${r.path}`, outcome: "denied", detail: { ip } });
+            metrics.authEvents.inc({ event: "rate_limited" });
+            reply.header("Retry-After", String(Math.max(1, Math.ceil(gate.retryAfterSec))));
+            return reply.code(429).send({ error: "too many login attempts" });
+          }
+        }
         if (r.auth !== "public") {
           const s = await loadSession(db, req.cookies.sid);
           if (s) {

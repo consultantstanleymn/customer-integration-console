@@ -18,6 +18,8 @@ const Env = z.object({
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   SESSION_TTL_MINUTES: z.coerce.number().default(480),
   LOG_LEVEL: z.string().default("info"),
+  // Login and callback rate limit per client IP, in requests per minute.
+  LOGIN_RATE_PER_MIN: z.coerce.number().default(10),
   // Secret provider backend. "env" reads CIC_SECRET_<NAME>, "file" reads <SECRET_DIR>/<name>, "gcp" uses Secret Manager.
   SECRET_BACKEND: z.enum(["env", "file", "gcp"]).default("env"),
   SECRET_DIR: z.string().optional(),
