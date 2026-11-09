@@ -1,0 +1,21 @@
+# Evidence: Browser tests with the web CSP and headers on
+label: VERIFIED LOCALLY
+date: 2026-11-09 08:35 UTC
+code commit: b0011ca221ec666d1b4e855cd87c6ee6bd02220f
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: nice -n 10 npm run e2e
+notes: The 7 browser tests pass against next dev with the CSP header set (dev adds unsafe-eval for hot reload). This does not test the production build in a browser.
+---
+Running 7 tests using 1 worker
+
+  ✓  1 e2e/console.spec.ts:20:1 › anonymous visitors are sent to the sign-in page (1.8s)
+  ✓  2 e2e/console.spec.ts:26:1 › engineer builds three connectors and runs them (4.7s)
+  ✓  3 e2e/console.spec.ts:57:1 › dead letters can be fixed and replayed (2.6s)
+  ✓  4 e2e/console.spec.ts:73:1 › dashboard shows runs, charts, quality and connector health (2.7s)
+  ✓  5 e2e/console.spec.ts:84:1 › schema drift shows up in the scorecard (3.1s)
+  ✓  6 e2e/console.spec.ts:95:1 › viewer is read-only and cannot open the audit log (2.9s)
+  ✓  7 e2e/console.spec.ts:107:1 › admin sees the audit trail, including the denied attempts (3.2s)
+
+  7 passed (29.8s)
+done
