@@ -55,3 +55,24 @@ Symptom: scorecard shows `schema_drift` failed, with "missing" or "unexpected" c
 - `increase(pipeline_runs_total{status="failed"}[1h]) > 0`
 - `dead_letters_pending > 100`
 - `histogram_quantile(0.95, sum by (le) (rate(pipeline_run_duration_seconds_bucket[5m]))) > 30`
+
+## 7. Rotate the source credential key
+
+Source credentials are encrypted with a key encryption key (KEK). The key id names the KEK. The secret provider holds each KEK under the name `source-kek-<kid>`.
+
+1. Create the new KEK in the secret provider under `source-kek-<new-kid>`. Use 32 random bytes in base64.
+2. Set `SOURCE_KEK_ACTIVE=<new-kid>` on the API.
+3. Set `SOURCE_KEK_PREVIOUS` to the old key ids, comma separated. Example: `SOURCE_KEK_PREVIOUS=dev1`.
+4. Set `SOURCE_KEK_GRACE_UNTIL` to an ISO date. Old key ids decrypt rows until this date. After the date the API refuses them with "the grace window ended".
+5. Restart the API. New writes use the new key id. Old rows still decrypt during the grace window.
+6. Run the rotation command:
+   ```
+   npm run rotate --workspace api -- --to <new-kid>
+   ```
+   The command decrypts each source row with the keyring and re-encrypts it with the new key id. It uses one transaction per row. It writes one audit row with action `secrets.rotated` and counts only.
+7. Run the command again. Rows that already use the new key id are skipped. The second run is safe.
+8. Check the audit log:
+   ```sql
+   SELECT actor, action, target, detail, at FROM audit_log WHERE action='secrets.rotated' ORDER BY id DESC LIMIT 5;
+   ```
+9. After the grace date, remove the old key ids from `SOURCE_KEK_PREVIOUS` and clear `SOURCE_KEK_GRACE_UNTIL`. Delete the old KEK in the secret provider.

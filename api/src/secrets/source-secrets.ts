@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
 import { buildSecretProvider, type SecretProvider } from "./provider.js";
-import { decryptField, encryptField, isEnvelope, type Envelope } from "./envelope.js";
+import { assertKidUsable, decryptField, encryptField, isEnvelope, type Envelope } from "./envelope.js";
 
 // Source credentials live in sources.config_secrets as envelope objects.
 // The KEK for a key id comes from the secret provider under the name source-kek-<kid>.
@@ -15,6 +15,13 @@ export type SourceLike = {
 export type SourceSecrets = {
   encryptInto(config: Record<string, string>): Promise<{ config: Record<string, string>; secrets: Record<string, Envelope> }>;
   get(source: SourceLike, name: SecretName): Promise<string | undefined>;
+  decrypt(env: Envelope): Promise<string>;
+  encrypt(plain: string, kid: string): Promise<Envelope>;
+  activeKid(): string;
+};
+
+export type SourceSecretsOptions = {
+  now?: () => Date;
 };
 
 const SECRET_NAMES: SecretName[] = ["secret", "apiKey"];
@@ -25,10 +32,18 @@ function parseKek(text: string, kid: string): Buffer {
   return buf;
 }
 
-export function createSourceSecrets(cfg: Config, provider: SecretProvider = buildSecretProvider(cfg)): SourceSecrets {
+export function createSourceSecrets(
+  cfg: Config,
+  provider: SecretProvider = buildSecretProvider(cfg),
+  opts: SourceSecretsOptions = {},
+): SourceSecrets {
   const keyring = new Map<string, Buffer>();
+  const now = opts.now ?? (() => new Date());
+  const previousKids = cfg.SOURCE_KEK_PREVIOUS;
+  const graceUntil = cfg.SOURCE_KEK_GRACE_UNTIL ? new Date(cfg.SOURCE_KEK_GRACE_UNTIL) : undefined;
 
   async function kekFor(kid: string): Promise<Buffer> {
+    assertKidUsable({ activeKid: cfg.SOURCE_KEK_ACTIVE, previousKids, graceUntil }, kid, now());
     const hit = keyring.get(kid);
     if (hit) return hit;
     const text = await provider.get(`source-kek-${kid}`);
@@ -51,19 +66,26 @@ export function createSourceSecrets(cfg: Config, provider: SecretProvider = buil
     return { config: out, secrets };
   }
 
+  async function decrypt(env: Envelope): Promise<string> {
+    const kek = await kekFor(env.kid);
+    return decryptField(env, new Map([[env.kid, kek]]));
+  }
+
+  async function encrypt(plain: string, kid: string): Promise<Envelope> {
+    const kek = await kekFor(kid);
+    return encryptField(plain, kek, kid);
+  }
+
   async function get(source: SourceLike, name: SecretName): Promise<string | undefined> {
     const stored = source.config_secrets;
     if (stored && typeof stored === "object") {
       const env = (stored as Record<string, unknown>)[name];
-      if (isEnvelope(env)) {
-        const kek = await kekFor(env.kid);
-        return decryptField(env, new Map([[env.kid, kek]]));
-      }
+      if (isEnvelope(env)) return decrypt(env);
     }
     // Rows that the one-time migration has not touched yet still hold a plain value.
     const plain = source.config?.[name];
     return typeof plain === "string" ? plain : undefined;
   }
 
-  return { encryptInto, get };
+  return { encryptInto, get, decrypt, encrypt, activeKid: () => cfg.SOURCE_KEK_ACTIVE };
 }

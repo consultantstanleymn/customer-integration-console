@@ -24,6 +24,13 @@ const Env = z.object({
   GCP_PROJECT: z.string().optional(),
   // Active key id for source credential encryption. The KEK is the secret source-kek-<kid>.
   SOURCE_KEK_ACTIVE: z.string().default("dev1"),
+  // Previous key ids that may still decrypt rows during the grace window. Comma list, default empty.
+  SOURCE_KEK_PREVIOUS: z
+    .string()
+    .default("")
+    .transform((s) => s.split(",").map((x) => x.trim()).filter((x) => x.length > 0)),
+  // ISO date string. After this date previous key ids are refused. Optional.
+  SOURCE_KEK_GRACE_UNTIL: z.string().optional(),
 });
 
 export type Config = z.infer<typeof Env> & { oidcInternal: string };

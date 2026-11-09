@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "migrate": "tsx src/migrate-cli.ts",
+    "rotate": "tsx src/rotate-cli.ts",
     "openapi": "tsx src/openapi-cli.ts > ../docs/openapi.json",
     "authz-matrix": "tsx src/authz-matrix-cli.ts > ../docs/engagement/evidence/authz-matrix.md",
     "typecheck": "tsc --noEmit",

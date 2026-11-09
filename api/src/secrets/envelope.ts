@@ -75,3 +75,18 @@ export function isEnvelope(v: unknown): v is Envelope {
   const o = v as Record<string, unknown>;
   return o.v === 1 && typeof o.kid === "string" && typeof o.iv === "string" && typeof o.tag === "string" && typeof o.dek_enc === "string" && typeof o.ct === "string";
 }
+
+export type KidPolicy = { activeKid: string; previousKids: string[]; graceUntil?: Date | undefined };
+
+/**
+ * Decides if a key id may decrypt now. The active key always can.
+ * A previous key can only while the grace window is open.
+ */
+export function assertKidUsable(policy: KidPolicy, kid: string, now: Date): void {
+  if (kid === policy.activeKid) return;
+  if (policy.previousKids.includes(kid)) {
+    if (policy.graceUntil && now.getTime() < policy.graceUntil.getTime()) return;
+    throw new Error(`key ${kid} is refused: the grace window ended`);
+  }
+  throw new Error(`unknown key id: ${kid}`);
+}
