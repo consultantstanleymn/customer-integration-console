@@ -21,11 +21,12 @@ const sampleBodies: Record<string, unknown> = {
 const concrete = (path: string) => path.replace(":id", "1");
 
 /** Classifies a status code into the matrix vocabulary. */
-function classify(status: number): Expectation {
+function classify(status: number): Expectation | `server error ${number}` {
   if (status === 401) return "401";
   if (status === 403) return "403";
   if (status >= 200 && status < 500) return "allow";
-  return "allow";
+  // A server error is not an authz result. It fails the case, so the error is seen.
+  return `server error ${status}`;
 }
 
 // The route tables only build closures here. Requests go through the real app below.

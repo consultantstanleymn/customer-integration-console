@@ -28,6 +28,7 @@ Every claim below was run on one laptop (MacBook Pro mid 2015, measured on one l
 | Source credentials use envelope encryption; rotation has a grace window | `npx vitest run api/test/envelope.test.ts api/test/rotation.test.ts` | `api/test/envelope.test.ts`, `api/test/rotation.test.ts` | 2026-11-09 |
 | The audit log is hash chained; a changed or deleted row is found | `npx vitest run api/test/audit-chain.test.ts` | `docs/engagement/evidence/audit-chain-tamper.txt` | 2026-11-09 |
 | Security headers, CSP and a login rate limit | `npx vitest run api/test/security-headers.test.ts web/test/headers.test.ts` | `api/test/security-headers.test.ts` | 2026-11-09 |
+| The compose file (all profiles, Keycloak included) passes `podman compose config` and `docker compose config` | see the file | `docs/engagement/evidence/compose-config.txt` | 2026-11-09 |
 | gitleaks, npm audit, Trivy image scans (three images) and a CycloneDX SBOM ran clean | see the file | `docs/engagement/evidence/security-gate-local.txt`, `docs/engagement/evidence/sbom-source.cdx.json` | 2026-11-09 |
 
 ## Authored, not run
@@ -130,7 +131,7 @@ npm run openapi     # regenerates docs/openapi.json from the route table
 
 ## What was NOT verified
 
-- `docker compose up` was not run end to end (Docker is not installed here). The images build, and the stack runs through `npm run stack`.
+- `docker compose up` was not run end to end (no Docker daemon here). `docker compose config` passes for every profile. The images build, and the stack runs through `npm run stack`.
 - Prometheus and Grafana were not started. A test checks that the dashboard only queries metrics the API exports.
 - Kubernetes: `kubectl` and `kubeconform` are not installed. A vitest file checks the manifests (probes, limits, selectors, HPA targets, no secrets). CI runs kubeconform, but that has not run.
 - Terraform: not installed, so `terraform validate` was not run. Nothing was applied.
