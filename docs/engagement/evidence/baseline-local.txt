@@ -1,0 +1,61 @@
+# Evidence: CON baseline before engagement work
+label: VERIFIED LOCALLY
+date: 2026-11-09 06:13 UTC
+code commit: b0167b4ca2f3285778e2ea80ac8ab6d1428f3455
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: npm run lint && npm run typecheck && nice -n 10 npm test; nice -n 10 npm run e2e
+notes: Lint, typecheck, 99 unit tests in 6 files and 7 Playwright tests passed at the baseline commit. This does not prove anything about GitHub Actions.
+---
+
+> customer-integration-console@0.1.0 lint
+> eslint .
+
+
+> customer-integration-console@0.1.0 typecheck
+> npm run typecheck -ws
+
+
+> @cic/api@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @cic/mocks@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @cic/web@0.1.0 typecheck
+> tsc --noEmit
+
+
+> customer-integration-console@0.1.0 test
+> vitest run
+
+
+ RUN  v5.1.0 ~/fde-integration-console
+
+
+ Test Files  6 passed (6)
+      Tests  99 passed (99)
+   Start at  01:12:41
+   Duration  7.07s (tests 65%, import 32%, transform 2%, worker 1%)
+
+    Isolate  6 workers spawned · ~254ms startup each (spawn + environment, per file)
+             at least ~1.27s faster with isolate: false - reuses workers across files instead of one per file
+
+
+> customer-integration-console@0.1.0 e2e
+> playwright test
+
+
+Running 7 tests using 1 worker
+
+  ✓  1 e2e/console.spec.ts:20:1 › anonymous visitors are sent to the sign-in page (819ms)
+  ✓  2 e2e/console.spec.ts:26:1 › engineer builds three connectors and runs them (3.2s)
+  ✓  3 e2e/console.spec.ts:57:1 › dead letters can be fixed and replayed (1.8s)
+  ✓  4 e2e/console.spec.ts:73:1 › dashboard shows runs, charts, quality and connector health (1.4s)
+  ✓  5 e2e/console.spec.ts:84:1 › schema drift shows up in the scorecard (1.7s)
+  ✓  6 e2e/console.spec.ts:95:1 › viewer is read-only and cannot open the audit log (1.7s)
+  ✓  7 e2e/console.spec.ts:107:1 › admin sees the audit trail, including the denied attempts (1.4s)
+
+  7 passed (17.9s)
