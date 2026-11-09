@@ -56,6 +56,53 @@ describe("mock OIDC provider", () => {
   });
 });
 
+describe("mock OIDC client credentials", () => {
+  let srv: Server, mbase: string;
+  const clientId = "etl-runner";
+  const clientSecret = "runner-secret";
+
+  beforeAll(async () => {
+    const probe = createSource();
+    await new Promise<void>((r) => probe.listen(0, "127.0.0.1", r));
+    const port = (probe.address() as AddressInfo).port;
+    probe.close();
+    mbase = `http://127.0.0.1:${port}`;
+    srv = await createOidc({
+      issuer: mbase,
+      clientId: "c",
+      clientSecret: "s",
+      machineClients: [{ clientId, secret: clientSecret, scopes: ["runs:start", "sources:read"] }],
+    });
+    await new Promise<void>((r) => srv.listen(port, "127.0.0.1", r));
+  });
+  afterAll(() => { srv.close(); });
+
+  const cc = (fields: Record<string, string>) =>
+    fetch(`${mbase}/token`, { method: "POST", body: new URLSearchParams({ grant_type: "client_credentials", ...fields }) });
+
+  it("issues a client-credentials token with scopes", async () => {
+    const res = await cc({ client_id: clientId, client_secret: clientSecret, scope: "runs:start sources:read" });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.token_type).toBe("Bearer");
+    expect(body.expires_in).toBe(300);
+    expect(body.scope).toBe("runs:start sources:read");
+    const claims = decodeJwt(body.access_token);
+    expect(claims).toMatchObject({ sub: clientId, aud: "cic-api", iss: mbase, scope: "runs:start sources:read" });
+    expect(claims.exp! - claims.iat!).toBe(300);
+  });
+  it("refuses a scope the client does not have", async () => {
+    const res = await cc({ client_id: clientId, client_secret: clientSecret, scope: "runs:start admin:all" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_scope" });
+  });
+  it("refuses a wrong client secret for client credentials", async () => {
+    const res = await cc({ client_id: clientId, client_secret: "bad", scope: "runs:start" });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "invalid_client" });
+  });
+});
+
 describe("mock REST source", () => {
   let srv: Server, url: string;
   beforeAll(async () => {

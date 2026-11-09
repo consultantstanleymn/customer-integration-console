@@ -1,5 +1,6 @@
 // A tiny OpenID Connect provider for local use. It implements the authorization code flow with PKCE
-// and signs ID tokens with RS256. NOT for production: it has no passwords and keeps state in memory.
+// and signs ID tokens with RS256. It also serves the client-credentials grant for machine clients.
+// NOT for production: it has no passwords and keeps state in memory.
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -11,17 +12,36 @@ export const USERS = [
   { sub: "u-carol", name: "Carol Viewer", email: "carol@example.test", roles: ["viewer"] },
 ];
 
+export type MachineClient = { clientId: string; secret: string; scopes: string[] };
+
 type Pending = { clientId: string; redirectUri: string; nonce: string; challenge: string; sub: string; exp: number };
 
-export async function createOidc(cfg: { issuer: string; clientId: string; clientSecret: string }): Promise<Server> {
+export async function createOidc(cfg: {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  machineClients?: MachineClient[];
+}): Promise<Server> {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(publicKey)), kid: "mock-1", alg: "RS256", use: "sig" };
   const codes = new Map<string, Pending>();
+  const machineClients = cfg.machineClients ?? [];
 
   const readForm = async (req: IncomingMessage) => {
     let s = "";
     for await (const c of req) s += c;
     return new URLSearchParams(s);
+  };
+
+  // Client credentials may arrive as HTTP Basic or as form fields.
+  const clientCredentials = (req: IncomingMessage, f: URLSearchParams) => {
+    const auth = req.headers.authorization ?? "";
+    if (auth.toLowerCase().startsWith("basic ")) {
+      const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
+      const i = decoded.indexOf(":");
+      if (i >= 0) return { clientId: decoded.slice(0, i), clientSecret: decoded.slice(i + 1) };
+    }
+    return { clientId: f.get("client_id") ?? "", clientSecret: f.get("client_secret") ?? "" };
   };
 
   return createServer(async (req, res) => {
@@ -32,7 +52,7 @@ export async function createOidc(cfg: { issuer: string; clientId: string; client
       return send(200, JSON.stringify({
         issuer: cfg.issuer, authorization_endpoint: `${cfg.issuer}/authorize`, token_endpoint: `${cfg.issuer}/token`,
         jwks_uri: `${cfg.issuer}/jwks`, response_types_supported: ["code"], id_token_signing_alg_values_supported: ["RS256"],
-        code_challenge_methods_supported: ["S256"],
+        code_challenge_methods_supported: ["S256"], grant_types_supported: ["authorization_code", "client_credentials"],
       }));
     }
     if (url.pathname === "/jwks") return send(200, JSON.stringify({ keys: [jwk] }));
@@ -61,6 +81,21 @@ export async function createOidc(cfg: { issuer: string; clientId: string; client
     // Step 3: the API swaps the code (plus the PKCE verifier) for tokens.
     if (url.pathname === "/token" && req.method === "POST") {
       const f = await readForm(req);
+
+      // Machine clients use the client-credentials grant.
+      if (f.get("grant_type") === "client_credentials") {
+        const { clientId, clientSecret } = clientCredentials(req, f);
+        const client = machineClients.find((c) => c.clientId === clientId);
+        if (!client || client.secret !== clientSecret) return send(401, JSON.stringify({ error: "invalid_client" }));
+        const requested = (f.get("scope") ?? "").split(/\s+/).filter(Boolean);
+        const granted = requested.length === 0 ? client.scopes : requested;
+        if (!granted.every((s) => client.scopes.includes(s))) return send(400, JSON.stringify({ error: "invalid_scope" }));
+        const accessToken = await new SignJWT({ scope: granted.join(" ") })
+          .setProtectedHeader({ alg: "RS256", kid: "mock-1" }).setIssuer(cfg.issuer).setAudience("cic-api")
+          .setSubject(client.clientId).setIssuedAt().setExpirationTime("5m").sign(privateKey);
+        return send(200, JSON.stringify({ access_token: accessToken, token_type: "Bearer", expires_in: 300, scope: granted.join(" ") }));
+      }
+
       const p = codes.get(f.get("code") ?? "");
       codes.delete(f.get("code") ?? ""); // one use only
       const challenge = createHash("sha256").update(f.get("code_verifier") ?? "").digest("base64url");
@@ -86,6 +121,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     issuer: process.env.OIDC_ISSUER ?? `http://localhost:${port}`,
     clientId: process.env.OIDC_CLIENT_ID ?? "integration-console",
     clientSecret: process.env.OIDC_CLIENT_SECRET ?? "dev-only-secret",
+    machineClients: [
+      {
+        clientId: "etl-runner",
+        secret: process.env.MOCK_RUNNER_SECRET ?? "local-test-only-runner-secret",
+        scopes: ["runs:start", "sources:read"],
+      },
+    ],
   });
   server.listen(port, () => console.log(`mock-oidc on :${port}`));
 }
