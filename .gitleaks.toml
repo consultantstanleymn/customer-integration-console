@@ -1,0 +1,44 @@
+# Secret scan settings for the integration console.
+# The default rules stay on. The entries below allow only known public values.
+[extend]
+useDefault = true
+
+# The compose file uses this password default so a developer can start the local
+# stack without a .env file. It is not a secret and it never leaves the laptop.
+[[allowlists]]
+description = "Local development database password default"
+paths = ['''docker-compose\.yml''']
+regexes = ['''cic-local-only''']
+
+# The API, the mock identity provider and the test helpers share this OIDC client
+# secret default. It is public and it only works against the local mock.
+[[allowlists]]
+description = "Local development OIDC client secret default"
+paths = [
+  '''api/src/config\.ts''',
+  '''api/test/helpers\.ts''',
+  '''mocks/src/oidc\.ts''',
+  '''docker-compose\.yml''',
+]
+regexes = ['''dev-only-secret''']
+
+# The API tests use fake keys, fake passwords and short test tokens.
+[[allowlists]]
+description = "Fake credentials in API test fixtures"
+paths = ['''api/test/.*\.ts''']
+
+# The mock identity provider tests use fake client secrets and short test tokens.
+[[allowlists]]
+description = "Fake credentials in mock identity provider test fixtures"
+paths = ['''mocks/test/.*\.ts''']
+
+# Next.js writes random preview keys into its build output. The output is not
+# tracked and it holds no real secret.
+[[allowlists]]
+description = "Generated Next.js build output"
+paths = ['''web/\.next/.*''']
+
+# Installed dependencies and compiled output are not project source.
+[[allowlists]]
+description = "Installed dependencies and compiled output"
+paths = ['''node_modules/.*''', '''api/dist/.*''']
