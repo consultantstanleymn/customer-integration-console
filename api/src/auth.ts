@@ -80,7 +80,11 @@ export async function exchangeCode(cfg: Config, code: string, redirectUri: strin
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: cfg.OIDC_CLIENT_ID, client_secret: cfg.OIDC_CLIENT_SECRET, code_verifier: verifier }),
   });
-  if (!res.ok) throw new Error("token exchange failed");
+  if (!res.ok) {
+    // The IdP answers invalid_grant for a code that is unknown or already used.
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error === "invalid_grant" ? "invalid_grant" : "token exchange failed");
+  }
   const { id_token } = (await res.json()) as { id_token: string };
   const jwks = createRemoteJWKSet(new URL("/jwks", cfg.oidcInternal));
   return verifyIdToken(id_token, jwks, { issuer: cfg.OIDC_ISSUER, audience: cfg.OIDC_CLIENT_ID, nonce });

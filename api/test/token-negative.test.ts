@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { JWK, KeyLike } from "jose";
 import { verifyIdToken } from "../src/auth.js";
+import { startEnv, type Env } from "./helpers.js";
 
 const ISSUER = "https://idp.example.test";
 const AUDIENCE = "integration-console";
@@ -112,5 +113,52 @@ describe("verifyIdToken", () => {
     const jwks = createLocalJWKSet({ keys: [keys.jwk] });
     const token = await sign(keys, { nonce: "nonce-other" });
     await expect(verifyIdToken(token, jwks, { issuer: ISSUER, audience: AUDIENCE, nonce: NONCE })).rejects.toThrow("nonce mismatch");
+  });
+});
+
+describe("callback rejects and audits", () => {
+  let env: Env | undefined;
+  afterEach(async () => { await env?.stop(); env = undefined; });
+
+  /** Runs the login start, then the mock authorize step, and returns the code and state. */
+  async function startLogin(e: Env, sub: "u-alice" | "u-bob" | "u-carol") {
+    const r1 = await e.app.inject({ url: "/auth/login" });
+    const tx = r1.cookies.find((c) => c.name === "oidc_tx")!.value;
+    const q = new URL(r1.headers.location as string).searchParams;
+    const form = new URLSearchParams({ client_id: q.get("client_id")!, redirect_uri: q.get("redirect_uri")!, state: q.get("state")!, nonce: q.get("nonce")!, code_challenge: q.get("code_challenge")!, sub });
+    const r2 = await fetch(`${e.cfg.OIDC_ISSUER}/authorize`, { method: "POST", body: form, redirect: "manual" });
+    const back = new URL(r2.headers.get("location")!);
+    return { tx, code: back.searchParams.get("code")!, state: back.searchParams.get("state")! };
+  }
+
+  async function failedRows(e: Env) {
+    const r = await e.db.query("SELECT actor, action, outcome, detail FROM audit_log WHERE action = 'auth.login_failed' ORDER BY id");
+    return r.rows as { actor: string; action: string; outcome: string; detail: { reason: string } }[];
+  }
+
+  it("replayed code is rejected and audited", async () => {
+    env = await startEnv();
+    const { tx, code, state } = await startLogin(env, "u-alice");
+    const first = await env.app.inject({ url: `/auth/callback?code=${code}&state=${state}`, cookies: { oidc_tx: tx } });
+    expect(first.statusCode).toBe(302);
+    const second = await env.app.inject({ url: `/auth/callback?code=${code}&state=${state}`, cookies: { oidc_tx: tx } });
+    expect(second.statusCode).toBe(401);
+    const rows = await failedRows(env);
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.actor).toBe("anonymous");
+    expect(rows[0]!.outcome).toBe("error");
+    expect(rows[0]!.detail.reason).toBe("code_replayed");
+  });
+
+  it("bad state is audited", async () => {
+    env = await startEnv();
+    const { tx, code } = await startLogin(env, "u-alice");
+    const res = await env.app.inject({ url: `/auth/callback?code=${code}&state=wrong-state`, cookies: { oidc_tx: tx } });
+    expect(res.statusCode).toBe(400);
+    const rows = await failedRows(env);
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.actor).toBe("anonymous");
+    expect(rows[0]!.outcome).toBe("error");
+    expect(rows[0]!.detail.reason).toBe("bad_state");
   });
 });

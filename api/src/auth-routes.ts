@@ -9,6 +9,12 @@ export function authRoutes({ db, cfg, metrics }: Deps): RouteDef[] {
   const secure = cfg.COOKIE_SECURE === "true";
   const redirectUri = `${cfg.WEB_URL}/api/auth/callback`;
 
+  /** Writes one rejected-login audit row with a short reason code. */
+  async function loginFailed(reason: string): Promise<void> {
+    await audit(db, { actor: "anonymous", action: "auth.login_failed", outcome: "error", detail: { reason } });
+    metrics.authEvents.inc({ event: "login_failed" });
+  }
+
   return [
     {
       method: "GET", path: "/auth/login", summary: "Start single sign-on (redirects to the identity provider)", auth: "public",
@@ -25,12 +31,19 @@ export function authRoutes({ db, cfg, metrics }: Deps): RouteDef[] {
         const { code, state } = c.query;
         c.reply.clearCookie("oidc_tx", { path: "/" });
         let tx: { state: string; nonce: string; verifier: string };
-        try { tx = JSON.parse(Buffer.from(raw ?? "", "base64url").toString()); } catch { throw new HttpError(400, "missing login state"); }
-        if (!code || !state || !safeEqual(state, tx.state)) throw new HttpError(400, "state mismatch");
+        try { tx = JSON.parse(Buffer.from(raw ?? "", "base64url").toString()); } catch {
+          await loginFailed("bad_state");
+          throw new HttpError(400, "missing login state");
+        }
+        if (!code || !state || !safeEqual(state, tx.state)) {
+          await loginFailed("bad_state");
+          throw new HttpError(400, "state mismatch");
+        }
         let claims;
         try { claims = await exchangeCode(cfg, code, redirectUri, tx.verifier, tx.nonce); } catch (e) {
-          await audit(db, { actor: "unknown", action: "auth.login", outcome: "error", detail: { reason: String(e) } });
-          metrics.authEvents.inc({ event: "login_failed" });
+          const msg = String(e);
+          const reason = /nonce mismatch/.test(msg) ? "nonce" : /invalid_grant/.test(msg) ? "code_replayed" : /token exchange failed/.test(msg) ? "token_exchange" : "token_invalid";
+          await loginFailed(reason);
           throw new HttpError(401, "login failed");
         }
         const email = String(claims.email ?? "");
