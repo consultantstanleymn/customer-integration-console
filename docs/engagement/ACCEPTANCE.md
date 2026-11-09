@@ -38,6 +38,6 @@ A criterion is "met locally" only when its evidence file exists and the named co
 
 1. Record the date and the code commit in each evidence file.
 2. Attach the command output to the evidence file.
-3. Change not started to Pass only after a clean run.
-4. Use Fail when a check fails and keep the output.
-5. Use Waived only with a risk decision that names the owner, the review date and the compensating controls.
+3. Change not started to met locally only after a clean run.
+4. Use not met when a check fails and keep the output.
+5. A criterion can stay open only with a risk decision that names the owner, the review date and the compensating controls.
