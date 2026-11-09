@@ -13,6 +13,35 @@ A TypeScript full-stack app that a forward deployed engineer could build for a c
 - **Access:** single sign-on through OpenID Connect (a small mock provider runs locally), session cookies, three roles (admin, engineer, viewer), CSRF protection, append-only audit log.
 - **Operations:** structured JSON logs, a Prometheus `/metrics` endpoint, a Grafana dashboard, Dockerfiles, Compose, Kubernetes manifests, Terraform for GCP, GitHub Actions.
 
+## Verified locally
+
+Every claim below was run on one laptop (MacBook Pro mid 2015, measured on one laptop). Dates are 2026-11-09. The evidence files hold the raw output and the commit.
+
+| Claim | Command | Evidence | Date |
+|---|---|---|---|
+| Unit and API tests pass: 256 tests, 9 held-out tests skipped | `npm test` | `docs/engagement/evidence/baseline-local.txt` (baseline), run again at the last commit | 2026-11-09 |
+| Browser tests pass with the CSP on: 7 tests | `npm run e2e` | `docs/engagement/evidence/web-csp-e2e.txt` | 2026-11-09 |
+| An authorization matrix checks every route as anonymous, viewer, engineer, admin and machine | `npx vitest run api/test/authz-matrix.test.ts` | `docs/engagement/evidence/authz-matrix-run.txt`, `docs/engagement/evidence/authz-matrix.md` | 2026-11-09 |
+| Ten bad-token cases are rejected (expired, audience, issuer, key id, signature, alg none, HS256 key confusion, nonce, replay) | `npx vitest run api/test/token-negative.test.ts` | `api/test/token-negative.test.ts` | 2026-11-09 |
+| OIDC discovery works against the mock IdP | `npx vitest run api/test/oidc-discovery.test.ts` | `api/test/oidc-discovery.test.ts` | 2026-11-09 |
+| Machine clients get scoped tokens; a missing scope gives 403 | `npx vitest run api/test/machine-scopes.test.ts` | `api/test/machine-scopes.test.ts` | 2026-11-09 |
+| Source credentials use envelope encryption; rotation has a grace window | `npx vitest run api/test/envelope.test.ts api/test/rotation.test.ts` | `api/test/envelope.test.ts`, `api/test/rotation.test.ts` | 2026-11-09 |
+| The audit log is hash chained; a changed or deleted row is found | `npx vitest run api/test/audit-chain.test.ts` | `docs/engagement/evidence/audit-chain-tamper.txt` | 2026-11-09 |
+| Security headers, CSP and a login rate limit | `npx vitest run api/test/security-headers.test.ts web/test/headers.test.ts` | `api/test/security-headers.test.ts` | 2026-11-09 |
+| gitleaks, npm audit, Trivy image scans (three images) and a CycloneDX SBOM ran clean | see the file | `docs/engagement/evidence/security-gate-local.txt`, `docs/engagement/evidence/sbom-source.cdx.json` | 2026-11-09 |
+
+## Authored, not run
+
+| File | What it would do | Why it did not run |
+|---|---|---|
+| `deploy/keycloak/realm-cic.json`, `api/test/oidc-heldout.test.ts`, `scripts/keycloak-heldout.sh` | Run the login and role suite against Keycloak | Authored, not run: written and syntax-checked with json.tool, podman compose config and shellcheck. Not executed against a real Keycloak server. Reason: tool not installed (image not pulled by owner decision) |
+| `api/src/secrets/provider.ts` (GCP adapter) | Read secrets from GCP Secret Manager | Authored, not run: tested with a fake HTTP client. Not executed against GCP. Reason: no cloud account by design |
+| `infra/` (Terraform for Cloud Run) | Create the cloud setup | Authored, not run: no terraform binary and no cloud account |
+| `k8s/` | Deploy to a cluster | Authored, not run: checked by tests only, no cluster run |
+| `.github/workflows/security.yml`, the CodeQL job and the new `ci.yml` steps | Run the security gate in GitHub Actions | Authored, not run: checked with actionlint. Not run on GitHub. Reason: needs GitHub Actions |
+
+The engagement documents are in `docs/engagement/`. Start with `REVIEW-GUIDE.md`.
+
 ## Architecture
 
 ```mermaid
@@ -91,7 +120,7 @@ npm run openapi     # regenerates docs/openapi.json from the route table
 
 | Check | Result |
 |---|---|
-| `npm test` | 99 tests, 6 files, all pass |
+| `npm test` | 99 tests, 6 files, all pass (2026-11-07). See "Verified locally" for the current count |
 | `npm run e2e` | 7 Playwright tests pass on the local stack |
 | `npm run lint`, `npm run typecheck` | clean |
 | `npm audit --audit-level=high` | no high or critical findings; 7 moderate remain in a dev-only lint dependency (minimatch) |
@@ -105,7 +134,7 @@ npm run openapi     # regenerates docs/openapi.json from the route table
 - Prometheus and Grafana were not started. A test checks that the dashboard only queries metrics the API exports.
 - Kubernetes: `kubectl` and `kubeconform` are not installed. A vitest file checks the manifests (probes, limits, selectors, HPA targets, no secrets). CI runs kubeconform, but that has not run.
 - Terraform: not installed, so `terraform validate` was not run. Nothing was applied.
-- The GitHub Actions workflow has never run.
+- The GitHub Actions jobs added after 2026-11-08 have not been checked on GitHub.
 
 See [LEARN.md](LEARN.md) for the list of simplifications.
 
