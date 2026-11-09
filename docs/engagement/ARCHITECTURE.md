@@ -97,3 +97,54 @@ flowchart TD
 14. CSV upload sends order rows to the API.
 15. Webhook senders send signed order events to the API.
 16. API exposes metrics to Prometheus.
+
+## Machine client flow
+
+An ETL runner is a machine client. It has no browser session. It gets an access token from the identity provider with the client credentials grant. The token carries scopes. The API checks the scope on each route. Only routes with a scopes list accept machine tokens. A token without the needed scope gets 403. Machine calls skip the CSRF check. The audit log records the actor as `client:<sub>` with role `machine`.
+
+```mermaid
+sequenceDiagram
+    participant ETL as ETL runner
+    participant IDP as Identity provider
+    participant API as API service
+    participant DB as Postgres
+
+    ETL->>IDP: Client credentials grant with client id and secret
+    IDP-->>ETL: Access token with scopes runs:start, sources:read
+    ETL->>API: Request with Bearer token
+    API->>API: Check token and scope for the route
+    alt Scope is missing
+        API-->>ETL: 403 Forbidden
+    else Scope is present
+        API->>DB: Read or write application data
+        API->>DB: Append audit row with actor client:<sub> and role machine
+        API-->>ETL: 200 OK
+    end
+```
+
+The scopes are `runs:start` and `sources:read`. A route without a scopes list rejects machine tokens. This is the safe default.
+
+## Secret provider
+
+The API reads key material from a secret provider. The provider is a port with three adapters:
+
+1. Env adapter. Reads a value from an environment variable.
+2. File adapter. Reads a value from a file on disk.
+3. GCP Secret Manager adapter. Reads a value from GCP Secret Manager.
+
+The key encryption key (KEK) names follow the pattern `source-kek-<kid>`. The `kid` names the KEK version.
+
+Source credentials use envelope encryption. The app makes a random data key for each value. The app encrypts the value with AES-256-GCM and the data key. The app wraps the data key with the KEK. The database stores the ciphertext, the wrapped data key, the nonce and the `kid`. The `sources` rows hold no plain secret.
+
+Rotation makes a new KEK version. The app re-wraps the data keys with the new KEK. The app does not decrypt and re-encrypt each value. During the grace window the app can decrypt with the old `kid` and the new `kid`. After the grace window the app drops the old `kid`.
+
+## Keycloak option
+
+The mock OIDC server stays for unit tests. The login and RBAC suite can also run against Keycloak.
+
+- Compose profile: a Keycloak service runs under a compose profile.
+- Realm file: `deploy/keycloak/realm-cic.json` holds the realm, clients, scopes and users.
+- Discovery: the API uses OIDC discovery on the Keycloak issuer URL. The code path is the same as for the mock.
+- Held-out suite: `api/test/oidc-heldout.test.ts` is authored but not run in CI. It runs when a Keycloak issuer URL is set.
+
+The Keycloak suite is authored, not run. The mock discovery tests run in CI.
