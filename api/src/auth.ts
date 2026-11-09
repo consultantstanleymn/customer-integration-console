@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { JWTVerifyGetKey } from "jose";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import type { Role } from "./schemas.js";
@@ -53,6 +54,25 @@ export function authorizeUrl(cfg: Config, redirectUri: string, tx: { state: stri
   return u.toString();
 }
 
+/**
+ * Checks an ID token. It verifies the signature (RS256 only), the issuer, the audience and the expiry.
+ * It then checks the nonce. Any failure throws.
+ */
+export async function verifyIdToken(
+  idToken: string,
+  jwks: JWTVerifyGetKey,
+  opts: { issuer: string; audience: string; nonce: string; maxClockSkewSec?: number },
+) {
+  const { payload } = await jwtVerify(idToken, jwks, {
+    issuer: opts.issuer,
+    audience: opts.audience,
+    algorithms: ["RS256"],
+    clockTolerance: opts.maxClockSkewSec ?? 0,
+  });
+  if (payload.nonce !== opts.nonce) throw new Error("nonce mismatch");
+  return payload;
+}
+
 /** Swaps the code for tokens, then checks signature, issuer, audience, expiry and nonce. */
 export async function exchangeCode(cfg: Config, code: string, redirectUri: string, verifier: string, nonce: string) {
   const res = await fetch(new URL("/token", cfg.oidcInternal), {
@@ -63,7 +83,5 @@ export async function exchangeCode(cfg: Config, code: string, redirectUri: strin
   if (!res.ok) throw new Error("token exchange failed");
   const { id_token } = (await res.json()) as { id_token: string };
   const jwks = createRemoteJWKSet(new URL("/jwks", cfg.oidcInternal));
-  const { payload } = await jwtVerify(id_token, jwks, { issuer: cfg.OIDC_ISSUER, audience: cfg.OIDC_CLIENT_ID });
-  if (payload.nonce !== nonce) throw new Error("nonce mismatch");
-  return payload;
+  return verifyIdToken(id_token, jwks, { issuer: cfg.OIDC_ISSUER, audience: cfg.OIDC_CLIENT_ID, nonce });
 }
