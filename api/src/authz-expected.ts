@@ -55,3 +55,30 @@ export function staleEntries(defs: RouteDef[]): string[] {
   const keys = new Set(defs.map(keyOf));
   return Object.keys(EXPECTED).filter((k) => !keys.has(k));
 }
+
+/** Markdown table of the expected matrix. The CLI and the matrix test both use it. */
+export function renderMatrixMarkdown(defs: RouteDef[]): string {
+  const missing = missingEntries(defs);
+  const stale = staleEntries(defs);
+
+  const lines: string[] = [];
+  lines.push("# Authorization matrix (expected)");
+  lines.push("");
+  lines.push("Generated from the route table. Do not edit by hand.");
+  lines.push("");
+  lines.push("`allow` means the call passed authz. A 2xx, 404 or 422 all count as passed authz.");
+  lines.push("");
+  lines.push("| Method and path | Summary | Anonymous | Viewer | Engineer | Admin |");
+  lines.push("|---|---|---|---|---|---|");
+  for (const r of defs) {
+    const k = keyOf(r);
+    const e = EXPECTED[k];
+    const cells = e ? [e.anonymous, e.viewer, e.engineer, e.admin] : ["MISSING", "MISSING", "MISSING", "MISSING"];
+    lines.push(`| \`${k}\` | ${r.summary} | ${cells.join(" | ")} |`);
+  }
+  lines.push("");
+  lines.push(`Routes: ${defs.length}. Matrix entries: ${Object.keys(EXPECTED).length}.`);
+  if (missing.length) lines.push(`Missing entries: ${missing.join(", ")}.`);
+  if (stale.length) lines.push(`Stale entries: ${stale.join(", ")}.`);
+  return lines.join("\n") + "\n";
+}
