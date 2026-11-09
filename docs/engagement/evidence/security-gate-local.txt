@@ -1,0 +1,35 @@
+# Evidence: Security gate local run, secret scan part
+label: VERIFIED LOCALLY
+date: 2026-11-09 06:43 UTC
+code commit: 992fda3d9b7fdef5533dbd81e6a222c1d12bbf62
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 . && gitleaks dir --config .gitleaks.toml --redact --no-banner . && nice -n 10 npx vitest run test/security-exceptions.test.ts
+notes: The secret scan found no leaks in the git history or in the working tree. The exceptions checker rejected an expired item and an item with a missing field. This does not prove the CI workflow, the dependency audit, the image scan or the SBOM. Those parts come in a later packet.
+---
+
+## Secret scan, full git history
+
+```
+1:43AM INF 14 commits scanned.
+1:43AM INF scanned ~453006 bytes (453.01 KB) in 113ms
+1:43AM INF no leaks found
+```
+
+## Secret scan, working tree
+
+```
+1:43AM INF scanned ~376638 bytes (376.64 KB) in 536ms
+1:43AM INF no leaks found
+```
+
+## Exceptions checker
+
+```
+ RUN  v5.1.0 .
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  01:43:24
+   Duration  2.00s (tests 71%, transform 16%, import 9%, worker 3%)
+```
