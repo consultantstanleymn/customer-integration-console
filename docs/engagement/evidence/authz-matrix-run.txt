@@ -1,0 +1,25 @@
+# Evidence: Authorization matrix test run and negative check
+label: VERIFIED LOCALLY
+date: 2026-11-09 07:42 UTC
+code commit: bed2e36fb5d1657ed0b5b6a5fdbbc1e61e01a4bb
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: nice -n 10 npx vitest run api/test/authz-matrix.test.ts
+notes: 76 tests passed: 17 routes by 4 roles, plus unmapped-route, stale-entry and current-markdown checks. A scratch route made the run fail. Local mock IdP only.
+---
+ RUN  v5.1.0 ~/fde-integration-console
+
+
+ Test Files  1 passed (1)
+      Tests  76 passed (76)
+   Start at  02:42:15
+   Duration  3.45s (tests 57%, import 35%, transform 7%)
+
+
+## Negative check: a scratch route GET /fake-scratch added to routes.ts, then restored with cp (file not committed)
+     × every route has an expected entry 8ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  api/test/authz-matrix.test.ts > authz matrix > every route has an expected entry
+AssertionError: unmapped routes:
+     66|   it("every route has an expected entry", () => {
+     68|     expect(missing, `unmapped routes:\n${missing.join("\n")}`).toEqual…
