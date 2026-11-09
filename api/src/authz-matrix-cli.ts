@@ -1,4 +1,3 @@
-import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { EXPECTED, allRoutes, keyOf, missingEntries, staleEntries } from "./authz-expected.js";
 
