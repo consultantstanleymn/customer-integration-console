@@ -1,6 +1,8 @@
 # Start the app:            docker compose up --build
 # Add Prometheus + Grafana: docker compose --profile observability up --build
+# Add Keycloak (held-out):  docker compose --profile keycloak up  (set KC_ADMIN_PASSWORD to change the local test default)
 # Web http://localhost:3000   Mock IdP http://localhost:4100   Mock source http://localhost:4200
+# Keycloak http://localhost:25280
 name: cic
 services:
   postgres:
@@ -54,6 +56,19 @@ services:
     depends_on: [api]
     ports: ["3000:3000"]
 
+  # Held-out identity provider. Not started by default. Use the keycloak profile.
+  # The realm export in deploy/keycloak/realm-cic.json is imported on start.
+  keycloak:
+    profiles: ["keycloak"]
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-local-test-only-admin}
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro,z
+    ports: ["127.0.0.1:25280:8080"]
+
   prometheus:
     profiles: [observability]
     image: prom/prometheus:v2.55.1
@@ -75,3 +90,4 @@ services:
 
 volumes:
   pgdata: {}
+

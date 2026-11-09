@@ -1,0 +1,127 @@
+{
+  "realm": "cic",
+  "enabled": true,
+  "displayName": "Integration Console (local test realm)",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Full access. Can read the audit log." },
+      { "name": "engineer", "description": "Can change pipelines and start runs." },
+      { "name": "viewer", "description": "Read only access." }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "runs:start",
+      "description": "Machine scope. Start a pipeline run.",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "sources:read",
+      "description": "Machine scope. Read source definitions.",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "integration-console",
+      "name": "Integration Console web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/api/auth/callback",
+        "http://127.0.0.1:*"
+      ],
+      "webOrigins": ["http://localhost:3000", "http://127.0.0.1:*"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "secret": "local-test-only-console-secret",
+      "defaultClientScopes": ["openid", "profile", "email"],
+      "optionalClientScopes": ["offline_access"]
+    },
+    {
+      "clientId": "etl-runner",
+      "name": "ETL runner (machine client)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [],
+      "attributes": {},
+      "secret": "local-test-only-runner-secret",
+      "defaultClientScopes": ["openid"],
+      "optionalClientScopes": ["runs:start", "sources:read"]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@fooddistco.example",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "local-test-only-alice", "temporary": false }],
+      "realmRoles": ["admin"],
+      "attributes": { "console_role": ["admin"] }
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@fooddistco.example",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Engineer",
+      "credentials": [{ "type": "password", "value": "local-test-only-bob", "temporary": false }],
+      "realmRoles": ["engineer"],
+      "attributes": { "console_role": ["engineer"] }
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "email": "carol@fooddistco.example",
+      "emailVerified": true,
+      "firstName": "Carol",
+      "lastName": "Viewer",
+      "credentials": [{ "type": "password", "value": "local-test-only-carol", "temporary": false }],
+      "realmRoles": ["viewer"],
+      "attributes": { "console_role": ["viewer"] }
+    }
+  ],
+  "protocolMappers": [
+    {
+      "name": "console_role",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "console_role",
+        "claim.name": "console_role",
+        "jsonType.label": "String",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "userinfo.token.claim": "true",
+        "multivalued": "false"
+      }
+    }
+  ]
+}
+
