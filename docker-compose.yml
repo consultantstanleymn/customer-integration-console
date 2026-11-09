@@ -41,6 +41,8 @@ services:
       DATABASE_URL: postgres://cic:${POSTGRES_PASSWORD:-cic-local-only}@postgres:5432/cic
       OIDC_ISSUER: http://localhost:4100
       OIDC_INTERNAL_URL: http://mock-oidc:4100
+      # Key-encryption key for source credentials. Local test value only. Replace it outside a laptop.
+      CIC_SECRET_SOURCE_KEK_DEV1: ${CIC_SECRET_SOURCE_KEK_DEV1:-bG9jYWwtdGVzdC1vbmx5LWtlay0wMTIzNDU2Nzg5YWI=}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-dev-only-secret}
       WEB_URL: http://localhost:3000
     depends_on:

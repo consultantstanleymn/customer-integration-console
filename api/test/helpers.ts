@@ -7,6 +7,11 @@ import { createSource } from "../../mocks/src/source.js";
 // @ts-expect-error plain .mjs helper without types
 import { freePort } from "../../scripts/pg-local.mjs";
 
+// Local test only KEK for key id dev1. Public value, never use outside tests.
+if (!process.env.CIC_SECRET_SOURCE_KEK_DEV1) {
+  process.env.CIC_SECRET_SOURCE_KEK_DEV1 = "bG9jYWwtdGVzdC1vbmx5LWtlay0wMTIzNDU2Nzg5YWI=";
+}
+
 export async function freshDb(): Promise<Db> {
   const db = createPool(process.env.TEST_DATABASE_URL!);
   await db.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public");

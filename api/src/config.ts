@@ -22,6 +22,8 @@ const Env = z.object({
   SECRET_BACKEND: z.enum(["env", "file", "gcp"]).default("env"),
   SECRET_DIR: z.string().optional(),
   GCP_PROJECT: z.string().optional(),
+  // Active key id for source credential encryption. The KEK is the secret source-kek-<kid>.
+  SOURCE_KEK_ACTIVE: z.string().default("dev1"),
 });
 
 export type Config = z.infer<typeof Env> & { oidcInternal: string };

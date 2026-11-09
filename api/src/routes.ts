@@ -9,6 +9,7 @@ import { runPipeline, RunConflict, type SourceRow } from "./pipeline/run.js";
 import { qualityScore } from "./quality.js";
 import { newToken } from "./auth.js";
 import type { Session } from "./auth.js";
+import { createSourceSecrets } from "./secrets/source-secrets.js";
 
 export type Deps = { db: Db; cfg: Config; metrics: Metrics };
 export type Ctx = { req: FastifyRequest & { rawBody?: string; session?: Session }; reply: FastifyReply; body: unknown; query: Record<string, string>; params: Record<string, string> };
@@ -31,13 +32,14 @@ export { HttpError };
 const maskConfig = (c: Record<string, string>) => Object.fromEntries(Object.entries(c).map(([k, v]) => [k, k === "secret" || k === "apiKey" ? "********" : v]));
 const idOf = (p: Record<string, string>) => { const n = Number(p.id); if (!Number.isInteger(n) || n < 1) throw new HttpError(400, "id must be a positive integer"); return n; };
 
-export function routes({ db, metrics }: Deps): RouteDef[] {
+export function routes({ db, cfg, metrics }: Deps): RouteDef[] {
   const who = (c: Ctx) => c.req.session?.email ?? "system";
   // Machine clients are recorded with the role "machine" in the audit log.
   const roleOf = (c: Ctx) => (c.req.session?.machine ? "machine" : c.req.session?.role);
+  const secrets = createSourceSecrets(cfg);
 
   async function sourceById(id: number): Promise<SourceRow> {
-    const s = (await db.query("SELECT id, name, type, config, watermark FROM sources WHERE id=$1", [id])).rows[0];
+    const s = (await db.query("SELECT id, name, type, config, config_secrets, watermark FROM sources WHERE id=$1", [id])).rows[0];
     if (!s) throw new HttpError(404, "source not found");
     return s;
   }
@@ -61,13 +63,17 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
       method: "GET", path: "/sources", summary: "List sources with health", auth: "viewer", scopes: ["sources:read"],
       handler: async () => {
         const { rows } = await db.query(`
-          SELECT s.id, s.name, s.type, s.config, s.watermark, s.created_at,
+          SELECT s.id, s.name, s.type, s.config, s.config_secrets, s.watermark, s.created_at,
                  (SELECT status FROM runs r WHERE r.source_id=s.id ORDER BY r.id DESC LIMIT 1) AS last_status,
                  (SELECT max(finished_at) FROM runs r WHERE r.source_id=s.id AND r.status='success') AS last_success_at,
                  (SELECT count(*)::int FROM dead_letters d WHERE d.source_id=s.id AND d.status='pending') AS pending_dead_letters,
                  (SELECT count(*)::int FROM webhook_events w WHERE w.source_id=s.id AND w.processed_run_id IS NULL) AS pending_events
           FROM sources s ORDER BY s.id`);
-        return rows.map((r) => ({ ...r, config: maskConfig(r.config) }));
+        // Encrypted credentials never leave the database. The list only shows that a value is set.
+        return rows.map(({ config_secrets, ...r }) => ({
+          ...r,
+          config: { ...maskConfig(r.config), ...Object.fromEntries(Object.keys(config_secrets ?? {}).map((k) => [k, "********"])) },
+        }));
       },
     },
     {
@@ -77,8 +83,9 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
         const config: Record<string, string> = { ...(b.config as Record<string, string>) };
         let secret: string | undefined;
         if (b.type === "webhook") { secret = newToken(24); config.secret = secret; }
+        const enc = await secrets.encryptInto(config);
         try {
-          const r = (await db.query("INSERT INTO sources (name, type, config, created_by) VALUES ($1,$2,$3,$4) RETURNING id", [b.name, b.type, JSON.stringify(config), who(c)])).rows[0];
+          const r = (await db.query("INSERT INTO sources (name, type, config, config_secrets, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id", [b.name, b.type, JSON.stringify(enc.config), JSON.stringify(enc.secrets), who(c)])).rows[0];
           await audit(db, { actor: who(c), role: roleOf(c), action: "source.create", target: `source:${r.id}`, detail: { name: b.name, type: b.type } });
           c.reply.code(201);
           return { id: r.id, name: b.name, type: b.type, webhookSecret: secret };
@@ -104,7 +111,10 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
       handler: async (c) => {
         const s = await sourceById(idOf(c.params));
         const result = await guard(async () => {
-          if (s.type === "rest") return runPipeline(db, s, await extractRest({ baseUrl: s.config.baseUrl!, apiKey: s.config.apiKey }, s.watermark), { kind: "manual", triggeredBy: who(c), metrics });
+          if (s.type === "rest") {
+            const apiKey = await secrets.get(s, "apiKey");
+            return runPipeline(db, s, await extractRest({ baseUrl: s.config.baseUrl!, apiKey }, s.watermark), { kind: "manual", triggeredBy: who(c), metrics });
+          }
           if (s.type === "webhook") { const w = await extractWebhook(db, s.id); return runPipeline(db, s, w.rows, { kind: "webhook", triggeredBy: who(c), webhookEventIds: w.eventIds, metrics }); }
           throw new HttpError(400, "csv sources load through /upload");
         });
@@ -127,7 +137,8 @@ export function routes({ db, metrics }: Deps): RouteDef[] {
       handler: async (c) => {
         const s = await sourceById(idOf(c.params));
         if (s.type !== "webhook") throw new HttpError(404, "source not found");
-        if (!verifySignature(s.config.secret ?? "", c.req.rawBody ?? "", c.req.headers["x-signature"] as string | undefined)) {
+        const secret = (await secrets.get(s, "secret")) ?? "";
+        if (!verifySignature(secret, c.req.rawBody ?? "", c.req.headers["x-signature"] as string | undefined)) {
           await audit(db, { actor: "webhook", action: "webhook.reject", target: `source:${s.id}`, outcome: "denied" });
           metrics.authEvents.inc({ event: "webhook_bad_signature" });
           throw new HttpError(401, "bad signature");

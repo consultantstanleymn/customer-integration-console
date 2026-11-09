@@ -36,6 +36,8 @@ start("oidc", tsx, ["mocks/src/oidc.ts"], { PORT: ports.oidc, OIDC_ISSUER: urls.
 start("source", tsx, ["mocks/src/source.ts"], { PORT: ports.source, RATE_LIMIT: process.env.RATE_LIMIT ?? "5", RATE_WINDOW_MS: process.env.RATE_WINDOW_MS ?? "2000" });
 start("api", tsx, ["api/src/server.ts"], {
   PORT: ports.api, DATABASE_URL: process.env.DATABASE_URL ?? pg.url, OIDC_ISSUER: urls.oidc, WEB_URL: urls.web, LOG_LEVEL: "info",
+  // Local test only KEK for key id dev1. Public value, never use outside local runs.
+  CIC_SECRET_SOURCE_KEK_DEV1: process.env.CIC_SECRET_SOURCE_KEK_DEV1 ?? "bG9jYWwtdGVzdC1vbmx5LWtlay0wMTIzNDU2Nzg5YWI=",
 });
 start("web", "node_modules/.bin/next", ["dev", "web", "-p", String(ports.web)], { API_URL: urls.api });
 
