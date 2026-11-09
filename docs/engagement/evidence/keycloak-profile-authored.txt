@@ -1,0 +1,18 @@
+# Evidence: Keycloak profile, realm export and held-out suite
+label: AUTHORED, NOT RUN
+date: 2026-11-09 07:51 UTC
+code commit: 1e9dc1cf3059d74966592226f34e8b9729fa3924
+working tree clean at run time: yes
+machine: MacBook Pro (mid 2015), 8 logical CPUs, 16 GB RAM, Fedora 44, podman 5.8.7 (measured on one laptop)
+command: see notes
+notes: Files are syntax-checked only. Discovery against the mock IdP is covered by the discovery tests.
+---
+json.tool: ok
+podman compose -f docker-compose.yml --profile keycloak config: exit 0
+podman compose -f docker-compose.yml config (default profile): exit 0
+docker compose config: not run. The docker CLI on this laptop has no compose plugin (error: unknown shorthand flag 'f').
+shellcheck scripts/keycloak-heldout.sh: clean
+ Test Files  1 skipped (1)
+      Tests  9 skipped (9)
+
+Authored, not run: this file is written and syntax-checked with python json.tool, podman compose config and shellcheck. It was not executed against a real Keycloak server. Reason: tool not installed (the Keycloak image is not pulled by owner decision).
