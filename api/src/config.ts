@@ -9,6 +9,8 @@ const Env = z.object({
   OIDC_INTERNAL_URL: z.string().optional(),
   OIDC_CLIENT_ID: z.string().default("integration-console"),
   OIDC_CLIENT_SECRET: z.string().default("dev-only-secret"),
+  // When "true", the API reads endpoints from the discovery document. When "false", it uses fixed paths.
+  OIDC_DISCOVERY: z.enum(["true", "false"]).default("true"),
   // Public URL of the web app. The OIDC callback lands on the web origin and is proxied to the API.
   WEB_URL: z.string().default("http://localhost:3000"),
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),

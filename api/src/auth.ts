@@ -4,6 +4,7 @@ import type { JWTVerifyGetKey } from "jose";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import type { Role } from "./schemas.js";
+import { discover } from "./oidc-discovery.js";
 
 export const RANK: Record<Role, number> = { viewer: 1, engineer: 2, admin: 3 };
 
@@ -44,9 +45,32 @@ export async function loadSession(db: Db, id: string | undefined): Promise<Sessi
 
 export const deleteSession = (db: Db, id: string) => db.query("DELETE FROM sessions WHERE id=$1", [id]);
 
+/** The API calls the token and JWKS endpoints on the internal URL. The browser uses the public one. */
+function toInternal(cfg: Config, url: string): string {
+  return url.startsWith(cfg.OIDC_ISSUER) ? cfg.oidcInternal + url.slice(cfg.OIDC_ISSUER.length) : url;
+}
+
+/** The authorization endpoint. Discovery is used unless the setting turns it off. */
+async function authorizationEndpoint(cfg: Config): Promise<string> {
+  if (cfg.OIDC_DISCOVERY === "false") return new URL("/authorize", cfg.OIDC_ISSUER).toString();
+  return (await discover(cfg.oidcInternal, fetch, cfg.OIDC_ISSUER)).authorization_endpoint;
+}
+
+/** The token endpoint. Discovery is used unless the setting turns it off. */
+async function tokenEndpoint(cfg: Config): Promise<string> {
+  if (cfg.OIDC_DISCOVERY === "false") return new URL("/token", cfg.oidcInternal).toString();
+  return toInternal(cfg, (await discover(cfg.oidcInternal, fetch, cfg.OIDC_ISSUER)).token_endpoint);
+}
+
+/** The JWKS URL. Discovery is used unless the setting turns it off. */
+async function jwksUri(cfg: Config): Promise<string> {
+  if (cfg.OIDC_DISCOVERY === "false") return new URL("/jwks", cfg.oidcInternal).toString();
+  return toInternal(cfg, (await discover(cfg.oidcInternal, fetch, cfg.OIDC_ISSUER)).jwks_uri);
+}
+
 /** Builds the URL that sends the browser to the identity provider (code flow + PKCE + state + nonce). */
-export function authorizeUrl(cfg: Config, redirectUri: string, tx: { state: string; nonce: string; verifier: string }): string {
-  const u = new URL("/authorize", cfg.OIDC_ISSUER);
+export async function authorizeUrl(cfg: Config, redirectUri: string, tx: { state: string; nonce: string; verifier: string }): Promise<string> {
+  const u = new URL(await authorizationEndpoint(cfg));
   u.search = new URLSearchParams({
     response_type: "code", client_id: cfg.OIDC_CLIENT_ID, redirect_uri: redirectUri, scope: "openid profile email",
     state: tx.state, nonce: tx.nonce, code_challenge: pkceChallenge(tx.verifier), code_challenge_method: "S256",
@@ -75,7 +99,7 @@ export async function verifyIdToken(
 
 /** Swaps the code for tokens, then checks signature, issuer, audience, expiry and nonce. */
 export async function exchangeCode(cfg: Config, code: string, redirectUri: string, verifier: string, nonce: string) {
-  const res = await fetch(new URL("/token", cfg.oidcInternal), {
+  const res = await fetch(await tokenEndpoint(cfg), {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: cfg.OIDC_CLIENT_ID, client_secret: cfg.OIDC_CLIENT_SECRET, code_verifier: verifier }),
@@ -86,6 +110,6 @@ export async function exchangeCode(cfg: Config, code: string, redirectUri: strin
     throw new Error(err.error === "invalid_grant" ? "invalid_grant" : "token exchange failed");
   }
   const { id_token } = (await res.json()) as { id_token: string };
-  const jwks = createRemoteJWKSet(new URL("/jwks", cfg.oidcInternal));
+  const jwks = createRemoteJWKSet(new URL(await jwksUri(cfg)));
   return verifyIdToken(id_token, jwks, { issuer: cfg.OIDC_ISSUER, audience: cfg.OIDC_CLIENT_ID, nonce });
 }

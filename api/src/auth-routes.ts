@@ -21,7 +21,7 @@ export function authRoutes({ db, cfg, metrics }: Deps): RouteDef[] {
       handler: async (c) => {
         const tx = { state: newToken(16), nonce: newToken(16), verifier: newToken(32) };
         c.reply.setCookie("oidc_tx", Buffer.from(JSON.stringify(tx)).toString("base64url"), { ...COOKIE, secure, path: "/", maxAge: 600 });
-        return c.reply.redirect(authorizeUrl(cfg, redirectUri, tx));
+        return c.reply.redirect(await authorizeUrl(cfg, redirectUri, tx));
       },
     },
     {
